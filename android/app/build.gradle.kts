@@ -17,7 +17,7 @@ android {
     namespace = "ar.maillet.gestion_de_stock"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
-
+    buildToolsVersion = "34.0.0"
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
