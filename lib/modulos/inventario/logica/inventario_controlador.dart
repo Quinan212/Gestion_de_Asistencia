@@ -11,8 +11,14 @@ class InventarioControlador extends ChangeNotifier {
   InventarioEstado _estado = InventarioEstado.inicial();
   InventarioEstado get estado => _estado;
 
+  // NUEVO: cache de stock por producto
+  Map<int, double> _stockPorProducto = const {};
+  Map<int, double> get stockPorProducto => _stockPorProducto;
+
   InventarioControlador({InventarioRepositorio? repositorio})
       : _repo = repositorio ?? Proveedores.inventarioRepositorio;
+
+  double stockDe(int productoId) => _stockPorProducto[productoId] ?? 0.0;
 
   Future<void> cargar() async {
     _estado = _estado.copiarCon(cargando: true, error: null);
@@ -22,6 +28,13 @@ class InventarioControlador extends ChangeNotifier {
       final productos = await _repo.listarProductos(
         incluirInactivos: _estado.mostrarInactivos,
       );
+
+      // batch stock
+      final ids = productos.map((p) => p.id).toList();
+      final stockMap = await _repo.calcularStockActualPorProductos(ids);
+
+      _stockPorProducto = stockMap;
+
       _estado = _estado.copiarCon(
         cargando: false,
         productos: productos,
@@ -34,6 +47,16 @@ class InventarioControlador extends ChangeNotifier {
         error: 'No se pudo cargar el inventario',
       );
       notifyListeners();
+    }
+  }
+
+  Future<void> recargarStockSolo() async {
+    try {
+      final ids = _estado.productos.map((p) => p.id).toList();
+      _stockPorProducto = await _repo.calcularStockActualPorProductos(ids);
+      notifyListeners();
+    } catch (_) {
+      // si falla no frenamos UI
     }
   }
 

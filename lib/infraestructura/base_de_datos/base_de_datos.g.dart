@@ -2058,9 +2058,6 @@ class $TablaLineasVentaTable extends TablaLineasVenta
     false,
     type: DriftSqlType.int,
     requiredDuringInsert: true,
-    defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'REFERENCES tabla_ventas (id) ON DELETE CASCADE',
-    ),
   );
   static const VerificationMeta _comboIdMeta = const VerificationMeta(
     'comboId',
@@ -2072,9 +2069,17 @@ class $TablaLineasVentaTable extends TablaLineasVenta
     false,
     type: DriftSqlType.int,
     requiredDuringInsert: true,
-    defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'REFERENCES tabla_combos (id) ON DELETE RESTRICT',
-    ),
+  );
+  static const VerificationMeta _productoIdMeta = const VerificationMeta(
+    'productoId',
+  );
+  @override
+  late final GeneratedColumn<int> productoId = GeneratedColumn<int>(
+    'producto_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
   );
   static const VerificationMeta _cantidadMeta = const VerificationMeta(
     'cantidad',
@@ -2096,8 +2101,7 @@ class $TablaLineasVentaTable extends TablaLineasVenta
     aliasedName,
     false,
     type: DriftSqlType.double,
-    requiredDuringInsert: false,
-    defaultValue: const Constant(0),
+    requiredDuringInsert: true,
   );
   static const VerificationMeta _subtotalMeta = const VerificationMeta(
     'subtotal',
@@ -2108,14 +2112,14 @@ class $TablaLineasVentaTable extends TablaLineasVenta
     aliasedName,
     false,
     type: DriftSqlType.double,
-    requiredDuringInsert: false,
-    defaultValue: const Constant(0),
+    requiredDuringInsert: true,
   );
   @override
   List<GeneratedColumn> get $columns => [
     id,
     ventaId,
     comboId,
+    productoId,
     cantidad,
     precioUnitario,
     subtotal,
@@ -2151,6 +2155,12 @@ class $TablaLineasVentaTable extends TablaLineasVenta
     } else if (isInserting) {
       context.missing(_comboIdMeta);
     }
+    if (data.containsKey('producto_id')) {
+      context.handle(
+        _productoIdMeta,
+        productoId.isAcceptableOrUnknown(data['producto_id']!, _productoIdMeta),
+      );
+    }
     if (data.containsKey('cantidad')) {
       context.handle(
         _cantidadMeta,
@@ -2167,12 +2177,16 @@ class $TablaLineasVentaTable extends TablaLineasVenta
           _precioUnitarioMeta,
         ),
       );
+    } else if (isInserting) {
+      context.missing(_precioUnitarioMeta);
     }
     if (data.containsKey('subtotal')) {
       context.handle(
         _subtotalMeta,
         subtotal.isAcceptableOrUnknown(data['subtotal']!, _subtotalMeta),
       );
+    } else if (isInserting) {
+      context.missing(_subtotalMeta);
     }
     return context;
   }
@@ -2195,6 +2209,10 @@ class $TablaLineasVentaTable extends TablaLineasVenta
         DriftSqlType.int,
         data['${effectivePrefix}combo_id'],
       )!,
+      productoId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}producto_id'],
+      ),
       cantidad: attachedDatabase.typeMapping.read(
         DriftSqlType.double,
         data['${effectivePrefix}cantidad'],
@@ -2221,6 +2239,7 @@ class TablaLineasVentaData extends DataClass
   final int id;
   final int ventaId;
   final int comboId;
+  final int? productoId;
   final double cantidad;
   final double precioUnitario;
   final double subtotal;
@@ -2228,6 +2247,7 @@ class TablaLineasVentaData extends DataClass
     required this.id,
     required this.ventaId,
     required this.comboId,
+    this.productoId,
     required this.cantidad,
     required this.precioUnitario,
     required this.subtotal,
@@ -2238,6 +2258,9 @@ class TablaLineasVentaData extends DataClass
     map['id'] = Variable<int>(id);
     map['venta_id'] = Variable<int>(ventaId);
     map['combo_id'] = Variable<int>(comboId);
+    if (!nullToAbsent || productoId != null) {
+      map['producto_id'] = Variable<int>(productoId);
+    }
     map['cantidad'] = Variable<double>(cantidad);
     map['precio_unitario'] = Variable<double>(precioUnitario);
     map['subtotal'] = Variable<double>(subtotal);
@@ -2249,6 +2272,9 @@ class TablaLineasVentaData extends DataClass
       id: Value(id),
       ventaId: Value(ventaId),
       comboId: Value(comboId),
+      productoId: productoId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(productoId),
       cantidad: Value(cantidad),
       precioUnitario: Value(precioUnitario),
       subtotal: Value(subtotal),
@@ -2264,6 +2290,7 @@ class TablaLineasVentaData extends DataClass
       id: serializer.fromJson<int>(json['id']),
       ventaId: serializer.fromJson<int>(json['ventaId']),
       comboId: serializer.fromJson<int>(json['comboId']),
+      productoId: serializer.fromJson<int?>(json['productoId']),
       cantidad: serializer.fromJson<double>(json['cantidad']),
       precioUnitario: serializer.fromJson<double>(json['precioUnitario']),
       subtotal: serializer.fromJson<double>(json['subtotal']),
@@ -2276,6 +2303,7 @@ class TablaLineasVentaData extends DataClass
       'id': serializer.toJson<int>(id),
       'ventaId': serializer.toJson<int>(ventaId),
       'comboId': serializer.toJson<int>(comboId),
+      'productoId': serializer.toJson<int?>(productoId),
       'cantidad': serializer.toJson<double>(cantidad),
       'precioUnitario': serializer.toJson<double>(precioUnitario),
       'subtotal': serializer.toJson<double>(subtotal),
@@ -2286,6 +2314,7 @@ class TablaLineasVentaData extends DataClass
     int? id,
     int? ventaId,
     int? comboId,
+    Value<int?> productoId = const Value.absent(),
     double? cantidad,
     double? precioUnitario,
     double? subtotal,
@@ -2293,6 +2322,7 @@ class TablaLineasVentaData extends DataClass
     id: id ?? this.id,
     ventaId: ventaId ?? this.ventaId,
     comboId: comboId ?? this.comboId,
+    productoId: productoId.present ? productoId.value : this.productoId,
     cantidad: cantidad ?? this.cantidad,
     precioUnitario: precioUnitario ?? this.precioUnitario,
     subtotal: subtotal ?? this.subtotal,
@@ -2302,6 +2332,9 @@ class TablaLineasVentaData extends DataClass
       id: data.id.present ? data.id.value : this.id,
       ventaId: data.ventaId.present ? data.ventaId.value : this.ventaId,
       comboId: data.comboId.present ? data.comboId.value : this.comboId,
+      productoId: data.productoId.present
+          ? data.productoId.value
+          : this.productoId,
       cantidad: data.cantidad.present ? data.cantidad.value : this.cantidad,
       precioUnitario: data.precioUnitario.present
           ? data.precioUnitario.value
@@ -2316,6 +2349,7 @@ class TablaLineasVentaData extends DataClass
           ..write('id: $id, ')
           ..write('ventaId: $ventaId, ')
           ..write('comboId: $comboId, ')
+          ..write('productoId: $productoId, ')
           ..write('cantidad: $cantidad, ')
           ..write('precioUnitario: $precioUnitario, ')
           ..write('subtotal: $subtotal')
@@ -2324,8 +2358,15 @@ class TablaLineasVentaData extends DataClass
   }
 
   @override
-  int get hashCode =>
-      Object.hash(id, ventaId, comboId, cantidad, precioUnitario, subtotal);
+  int get hashCode => Object.hash(
+    id,
+    ventaId,
+    comboId,
+    productoId,
+    cantidad,
+    precioUnitario,
+    subtotal,
+  );
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -2333,6 +2374,7 @@ class TablaLineasVentaData extends DataClass
           other.id == this.id &&
           other.ventaId == this.ventaId &&
           other.comboId == this.comboId &&
+          other.productoId == this.productoId &&
           other.cantidad == this.cantidad &&
           other.precioUnitario == this.precioUnitario &&
           other.subtotal == this.subtotal);
@@ -2342,6 +2384,7 @@ class TablaLineasVentaCompanion extends UpdateCompanion<TablaLineasVentaData> {
   final Value<int> id;
   final Value<int> ventaId;
   final Value<int> comboId;
+  final Value<int?> productoId;
   final Value<double> cantidad;
   final Value<double> precioUnitario;
   final Value<double> subtotal;
@@ -2349,6 +2392,7 @@ class TablaLineasVentaCompanion extends UpdateCompanion<TablaLineasVentaData> {
     this.id = const Value.absent(),
     this.ventaId = const Value.absent(),
     this.comboId = const Value.absent(),
+    this.productoId = const Value.absent(),
     this.cantidad = const Value.absent(),
     this.precioUnitario = const Value.absent(),
     this.subtotal = const Value.absent(),
@@ -2357,16 +2401,20 @@ class TablaLineasVentaCompanion extends UpdateCompanion<TablaLineasVentaData> {
     this.id = const Value.absent(),
     required int ventaId,
     required int comboId,
+    this.productoId = const Value.absent(),
     required double cantidad,
-    this.precioUnitario = const Value.absent(),
-    this.subtotal = const Value.absent(),
+    required double precioUnitario,
+    required double subtotal,
   }) : ventaId = Value(ventaId),
        comboId = Value(comboId),
-       cantidad = Value(cantidad);
+       cantidad = Value(cantidad),
+       precioUnitario = Value(precioUnitario),
+       subtotal = Value(subtotal);
   static Insertable<TablaLineasVentaData> custom({
     Expression<int>? id,
     Expression<int>? ventaId,
     Expression<int>? comboId,
+    Expression<int>? productoId,
     Expression<double>? cantidad,
     Expression<double>? precioUnitario,
     Expression<double>? subtotal,
@@ -2375,6 +2423,7 @@ class TablaLineasVentaCompanion extends UpdateCompanion<TablaLineasVentaData> {
       if (id != null) 'id': id,
       if (ventaId != null) 'venta_id': ventaId,
       if (comboId != null) 'combo_id': comboId,
+      if (productoId != null) 'producto_id': productoId,
       if (cantidad != null) 'cantidad': cantidad,
       if (precioUnitario != null) 'precio_unitario': precioUnitario,
       if (subtotal != null) 'subtotal': subtotal,
@@ -2385,6 +2434,7 @@ class TablaLineasVentaCompanion extends UpdateCompanion<TablaLineasVentaData> {
     Value<int>? id,
     Value<int>? ventaId,
     Value<int>? comboId,
+    Value<int?>? productoId,
     Value<double>? cantidad,
     Value<double>? precioUnitario,
     Value<double>? subtotal,
@@ -2393,6 +2443,7 @@ class TablaLineasVentaCompanion extends UpdateCompanion<TablaLineasVentaData> {
       id: id ?? this.id,
       ventaId: ventaId ?? this.ventaId,
       comboId: comboId ?? this.comboId,
+      productoId: productoId ?? this.productoId,
       cantidad: cantidad ?? this.cantidad,
       precioUnitario: precioUnitario ?? this.precioUnitario,
       subtotal: subtotal ?? this.subtotal,
@@ -2410,6 +2461,9 @@ class TablaLineasVentaCompanion extends UpdateCompanion<TablaLineasVentaData> {
     }
     if (comboId.present) {
       map['combo_id'] = Variable<int>(comboId.value);
+    }
+    if (productoId.present) {
+      map['producto_id'] = Variable<int>(productoId.value);
     }
     if (cantidad.present) {
       map['cantidad'] = Variable<double>(cantidad.value);
@@ -2429,6 +2483,7 @@ class TablaLineasVentaCompanion extends UpdateCompanion<TablaLineasVentaData> {
           ..write('id: $id, ')
           ..write('ventaId: $ventaId, ')
           ..write('comboId: $comboId, ')
+          ..write('productoId: $productoId, ')
           ..write('cantidad: $cantidad, ')
           ..write('precioUnitario: $precioUnitario, ')
           ..write('subtotal: $subtotal')
@@ -3193,6 +3248,1201 @@ class TablaLineasCompraCompanion
   }
 }
 
+class $TablaPedidosTable extends TablaPedidos
+    with TableInfo<$TablaPedidosTable, TablaPedido> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $TablaPedidosTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _fechaMeta = const VerificationMeta('fecha');
+  @override
+  late final GeneratedColumn<DateTime> fecha = GeneratedColumn<DateTime>(
+    'fecha',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  static const VerificationMeta _clienteMeta = const VerificationMeta(
+    'cliente',
+  );
+  @override
+  late final GeneratedColumn<String> cliente = GeneratedColumn<String>(
+    'cliente',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _notaMeta = const VerificationMeta('nota');
+  @override
+  late final GeneratedColumn<String> nota = GeneratedColumn<String>(
+    'nota',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _envioMontoMeta = const VerificationMeta(
+    'envioMonto',
+  );
+  @override
+  late final GeneratedColumn<double> envioMonto = GeneratedColumn<double>(
+    'envio_monto',
+    aliasedName,
+    false,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _medioPagoMeta = const VerificationMeta(
+    'medioPago',
+  );
+  @override
+  late final GeneratedColumn<String> medioPago = GeneratedColumn<String>(
+    'medio_pago',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('Efectivo'),
+  );
+  static const VerificationMeta _estadoPagoMeta = const VerificationMeta(
+    'estadoPago',
+  );
+  @override
+  late final GeneratedColumn<String> estadoPago = GeneratedColumn<String>(
+    'estado_pago',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('pendiente'),
+  );
+  static const VerificationMeta _estadoMeta = const VerificationMeta('estado');
+  @override
+  late final GeneratedColumn<String> estado = GeneratedColumn<String>(
+    'estado',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('borrador'),
+  );
+  static const VerificationMeta _subtotalMeta = const VerificationMeta(
+    'subtotal',
+  );
+  @override
+  late final GeneratedColumn<double> subtotal = GeneratedColumn<double>(
+    'subtotal',
+    aliasedName,
+    false,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _totalMeta = const VerificationMeta('total');
+  @override
+  late final GeneratedColumn<double> total = GeneratedColumn<double>(
+    'total',
+    aliasedName,
+    false,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _ventaIdMeta = const VerificationMeta(
+    'ventaId',
+  );
+  @override
+  late final GeneratedColumn<int> ventaId = GeneratedColumn<int>(
+    'venta_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES tabla_ventas (id)',
+    ),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    fecha,
+    cliente,
+    nota,
+    envioMonto,
+    medioPago,
+    estadoPago,
+    estado,
+    subtotal,
+    total,
+    ventaId,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'tabla_pedidos';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<TablaPedido> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('fecha')) {
+      context.handle(
+        _fechaMeta,
+        fecha.isAcceptableOrUnknown(data['fecha']!, _fechaMeta),
+      );
+    }
+    if (data.containsKey('cliente')) {
+      context.handle(
+        _clienteMeta,
+        cliente.isAcceptableOrUnknown(data['cliente']!, _clienteMeta),
+      );
+    }
+    if (data.containsKey('nota')) {
+      context.handle(
+        _notaMeta,
+        nota.isAcceptableOrUnknown(data['nota']!, _notaMeta),
+      );
+    }
+    if (data.containsKey('envio_monto')) {
+      context.handle(
+        _envioMontoMeta,
+        envioMonto.isAcceptableOrUnknown(data['envio_monto']!, _envioMontoMeta),
+      );
+    }
+    if (data.containsKey('medio_pago')) {
+      context.handle(
+        _medioPagoMeta,
+        medioPago.isAcceptableOrUnknown(data['medio_pago']!, _medioPagoMeta),
+      );
+    }
+    if (data.containsKey('estado_pago')) {
+      context.handle(
+        _estadoPagoMeta,
+        estadoPago.isAcceptableOrUnknown(data['estado_pago']!, _estadoPagoMeta),
+      );
+    }
+    if (data.containsKey('estado')) {
+      context.handle(
+        _estadoMeta,
+        estado.isAcceptableOrUnknown(data['estado']!, _estadoMeta),
+      );
+    }
+    if (data.containsKey('subtotal')) {
+      context.handle(
+        _subtotalMeta,
+        subtotal.isAcceptableOrUnknown(data['subtotal']!, _subtotalMeta),
+      );
+    }
+    if (data.containsKey('total')) {
+      context.handle(
+        _totalMeta,
+        total.isAcceptableOrUnknown(data['total']!, _totalMeta),
+      );
+    }
+    if (data.containsKey('venta_id')) {
+      context.handle(
+        _ventaIdMeta,
+        ventaId.isAcceptableOrUnknown(data['venta_id']!, _ventaIdMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  TablaPedido map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return TablaPedido(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      fecha: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}fecha'],
+      )!,
+      cliente: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}cliente'],
+      ),
+      nota: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}nota'],
+      ),
+      envioMonto: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}envio_monto'],
+      )!,
+      medioPago: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}medio_pago'],
+      )!,
+      estadoPago: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}estado_pago'],
+      )!,
+      estado: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}estado'],
+      )!,
+      subtotal: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}subtotal'],
+      )!,
+      total: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}total'],
+      )!,
+      ventaId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}venta_id'],
+      ),
+    );
+  }
+
+  @override
+  $TablaPedidosTable createAlias(String alias) {
+    return $TablaPedidosTable(attachedDatabase, alias);
+  }
+}
+
+class TablaPedido extends DataClass implements Insertable<TablaPedido> {
+  final int id;
+  final DateTime fecha;
+  final String? cliente;
+  final String? nota;
+  final double envioMonto;
+  final String medioPago;
+  final String estadoPago;
+  final String estado;
+  final double subtotal;
+  final double total;
+  final int? ventaId;
+  const TablaPedido({
+    required this.id,
+    required this.fecha,
+    this.cliente,
+    this.nota,
+    required this.envioMonto,
+    required this.medioPago,
+    required this.estadoPago,
+    required this.estado,
+    required this.subtotal,
+    required this.total,
+    this.ventaId,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['fecha'] = Variable<DateTime>(fecha);
+    if (!nullToAbsent || cliente != null) {
+      map['cliente'] = Variable<String>(cliente);
+    }
+    if (!nullToAbsent || nota != null) {
+      map['nota'] = Variable<String>(nota);
+    }
+    map['envio_monto'] = Variable<double>(envioMonto);
+    map['medio_pago'] = Variable<String>(medioPago);
+    map['estado_pago'] = Variable<String>(estadoPago);
+    map['estado'] = Variable<String>(estado);
+    map['subtotal'] = Variable<double>(subtotal);
+    map['total'] = Variable<double>(total);
+    if (!nullToAbsent || ventaId != null) {
+      map['venta_id'] = Variable<int>(ventaId);
+    }
+    return map;
+  }
+
+  TablaPedidosCompanion toCompanion(bool nullToAbsent) {
+    return TablaPedidosCompanion(
+      id: Value(id),
+      fecha: Value(fecha),
+      cliente: cliente == null && nullToAbsent
+          ? const Value.absent()
+          : Value(cliente),
+      nota: nota == null && nullToAbsent ? const Value.absent() : Value(nota),
+      envioMonto: Value(envioMonto),
+      medioPago: Value(medioPago),
+      estadoPago: Value(estadoPago),
+      estado: Value(estado),
+      subtotal: Value(subtotal),
+      total: Value(total),
+      ventaId: ventaId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(ventaId),
+    );
+  }
+
+  factory TablaPedido.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return TablaPedido(
+      id: serializer.fromJson<int>(json['id']),
+      fecha: serializer.fromJson<DateTime>(json['fecha']),
+      cliente: serializer.fromJson<String?>(json['cliente']),
+      nota: serializer.fromJson<String?>(json['nota']),
+      envioMonto: serializer.fromJson<double>(json['envioMonto']),
+      medioPago: serializer.fromJson<String>(json['medioPago']),
+      estadoPago: serializer.fromJson<String>(json['estadoPago']),
+      estado: serializer.fromJson<String>(json['estado']),
+      subtotal: serializer.fromJson<double>(json['subtotal']),
+      total: serializer.fromJson<double>(json['total']),
+      ventaId: serializer.fromJson<int?>(json['ventaId']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'fecha': serializer.toJson<DateTime>(fecha),
+      'cliente': serializer.toJson<String?>(cliente),
+      'nota': serializer.toJson<String?>(nota),
+      'envioMonto': serializer.toJson<double>(envioMonto),
+      'medioPago': serializer.toJson<String>(medioPago),
+      'estadoPago': serializer.toJson<String>(estadoPago),
+      'estado': serializer.toJson<String>(estado),
+      'subtotal': serializer.toJson<double>(subtotal),
+      'total': serializer.toJson<double>(total),
+      'ventaId': serializer.toJson<int?>(ventaId),
+    };
+  }
+
+  TablaPedido copyWith({
+    int? id,
+    DateTime? fecha,
+    Value<String?> cliente = const Value.absent(),
+    Value<String?> nota = const Value.absent(),
+    double? envioMonto,
+    String? medioPago,
+    String? estadoPago,
+    String? estado,
+    double? subtotal,
+    double? total,
+    Value<int?> ventaId = const Value.absent(),
+  }) => TablaPedido(
+    id: id ?? this.id,
+    fecha: fecha ?? this.fecha,
+    cliente: cliente.present ? cliente.value : this.cliente,
+    nota: nota.present ? nota.value : this.nota,
+    envioMonto: envioMonto ?? this.envioMonto,
+    medioPago: medioPago ?? this.medioPago,
+    estadoPago: estadoPago ?? this.estadoPago,
+    estado: estado ?? this.estado,
+    subtotal: subtotal ?? this.subtotal,
+    total: total ?? this.total,
+    ventaId: ventaId.present ? ventaId.value : this.ventaId,
+  );
+  TablaPedido copyWithCompanion(TablaPedidosCompanion data) {
+    return TablaPedido(
+      id: data.id.present ? data.id.value : this.id,
+      fecha: data.fecha.present ? data.fecha.value : this.fecha,
+      cliente: data.cliente.present ? data.cliente.value : this.cliente,
+      nota: data.nota.present ? data.nota.value : this.nota,
+      envioMonto: data.envioMonto.present
+          ? data.envioMonto.value
+          : this.envioMonto,
+      medioPago: data.medioPago.present ? data.medioPago.value : this.medioPago,
+      estadoPago: data.estadoPago.present
+          ? data.estadoPago.value
+          : this.estadoPago,
+      estado: data.estado.present ? data.estado.value : this.estado,
+      subtotal: data.subtotal.present ? data.subtotal.value : this.subtotal,
+      total: data.total.present ? data.total.value : this.total,
+      ventaId: data.ventaId.present ? data.ventaId.value : this.ventaId,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('TablaPedido(')
+          ..write('id: $id, ')
+          ..write('fecha: $fecha, ')
+          ..write('cliente: $cliente, ')
+          ..write('nota: $nota, ')
+          ..write('envioMonto: $envioMonto, ')
+          ..write('medioPago: $medioPago, ')
+          ..write('estadoPago: $estadoPago, ')
+          ..write('estado: $estado, ')
+          ..write('subtotal: $subtotal, ')
+          ..write('total: $total, ')
+          ..write('ventaId: $ventaId')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    fecha,
+    cliente,
+    nota,
+    envioMonto,
+    medioPago,
+    estadoPago,
+    estado,
+    subtotal,
+    total,
+    ventaId,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is TablaPedido &&
+          other.id == this.id &&
+          other.fecha == this.fecha &&
+          other.cliente == this.cliente &&
+          other.nota == this.nota &&
+          other.envioMonto == this.envioMonto &&
+          other.medioPago == this.medioPago &&
+          other.estadoPago == this.estadoPago &&
+          other.estado == this.estado &&
+          other.subtotal == this.subtotal &&
+          other.total == this.total &&
+          other.ventaId == this.ventaId);
+}
+
+class TablaPedidosCompanion extends UpdateCompanion<TablaPedido> {
+  final Value<int> id;
+  final Value<DateTime> fecha;
+  final Value<String?> cliente;
+  final Value<String?> nota;
+  final Value<double> envioMonto;
+  final Value<String> medioPago;
+  final Value<String> estadoPago;
+  final Value<String> estado;
+  final Value<double> subtotal;
+  final Value<double> total;
+  final Value<int?> ventaId;
+  const TablaPedidosCompanion({
+    this.id = const Value.absent(),
+    this.fecha = const Value.absent(),
+    this.cliente = const Value.absent(),
+    this.nota = const Value.absent(),
+    this.envioMonto = const Value.absent(),
+    this.medioPago = const Value.absent(),
+    this.estadoPago = const Value.absent(),
+    this.estado = const Value.absent(),
+    this.subtotal = const Value.absent(),
+    this.total = const Value.absent(),
+    this.ventaId = const Value.absent(),
+  });
+  TablaPedidosCompanion.insert({
+    this.id = const Value.absent(),
+    this.fecha = const Value.absent(),
+    this.cliente = const Value.absent(),
+    this.nota = const Value.absent(),
+    this.envioMonto = const Value.absent(),
+    this.medioPago = const Value.absent(),
+    this.estadoPago = const Value.absent(),
+    this.estado = const Value.absent(),
+    this.subtotal = const Value.absent(),
+    this.total = const Value.absent(),
+    this.ventaId = const Value.absent(),
+  });
+  static Insertable<TablaPedido> custom({
+    Expression<int>? id,
+    Expression<DateTime>? fecha,
+    Expression<String>? cliente,
+    Expression<String>? nota,
+    Expression<double>? envioMonto,
+    Expression<String>? medioPago,
+    Expression<String>? estadoPago,
+    Expression<String>? estado,
+    Expression<double>? subtotal,
+    Expression<double>? total,
+    Expression<int>? ventaId,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (fecha != null) 'fecha': fecha,
+      if (cliente != null) 'cliente': cliente,
+      if (nota != null) 'nota': nota,
+      if (envioMonto != null) 'envio_monto': envioMonto,
+      if (medioPago != null) 'medio_pago': medioPago,
+      if (estadoPago != null) 'estado_pago': estadoPago,
+      if (estado != null) 'estado': estado,
+      if (subtotal != null) 'subtotal': subtotal,
+      if (total != null) 'total': total,
+      if (ventaId != null) 'venta_id': ventaId,
+    });
+  }
+
+  TablaPedidosCompanion copyWith({
+    Value<int>? id,
+    Value<DateTime>? fecha,
+    Value<String?>? cliente,
+    Value<String?>? nota,
+    Value<double>? envioMonto,
+    Value<String>? medioPago,
+    Value<String>? estadoPago,
+    Value<String>? estado,
+    Value<double>? subtotal,
+    Value<double>? total,
+    Value<int?>? ventaId,
+  }) {
+    return TablaPedidosCompanion(
+      id: id ?? this.id,
+      fecha: fecha ?? this.fecha,
+      cliente: cliente ?? this.cliente,
+      nota: nota ?? this.nota,
+      envioMonto: envioMonto ?? this.envioMonto,
+      medioPago: medioPago ?? this.medioPago,
+      estadoPago: estadoPago ?? this.estadoPago,
+      estado: estado ?? this.estado,
+      subtotal: subtotal ?? this.subtotal,
+      total: total ?? this.total,
+      ventaId: ventaId ?? this.ventaId,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (fecha.present) {
+      map['fecha'] = Variable<DateTime>(fecha.value);
+    }
+    if (cliente.present) {
+      map['cliente'] = Variable<String>(cliente.value);
+    }
+    if (nota.present) {
+      map['nota'] = Variable<String>(nota.value);
+    }
+    if (envioMonto.present) {
+      map['envio_monto'] = Variable<double>(envioMonto.value);
+    }
+    if (medioPago.present) {
+      map['medio_pago'] = Variable<String>(medioPago.value);
+    }
+    if (estadoPago.present) {
+      map['estado_pago'] = Variable<String>(estadoPago.value);
+    }
+    if (estado.present) {
+      map['estado'] = Variable<String>(estado.value);
+    }
+    if (subtotal.present) {
+      map['subtotal'] = Variable<double>(subtotal.value);
+    }
+    if (total.present) {
+      map['total'] = Variable<double>(total.value);
+    }
+    if (ventaId.present) {
+      map['venta_id'] = Variable<int>(ventaId.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('TablaPedidosCompanion(')
+          ..write('id: $id, ')
+          ..write('fecha: $fecha, ')
+          ..write('cliente: $cliente, ')
+          ..write('nota: $nota, ')
+          ..write('envioMonto: $envioMonto, ')
+          ..write('medioPago: $medioPago, ')
+          ..write('estadoPago: $estadoPago, ')
+          ..write('estado: $estado, ')
+          ..write('subtotal: $subtotal, ')
+          ..write('total: $total, ')
+          ..write('ventaId: $ventaId')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $TablaLineasPedidoTable extends TablaLineasPedido
+    with TableInfo<$TablaLineasPedidoTable, TablaLineasPedidoData> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $TablaLineasPedidoTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _pedidoIdMeta = const VerificationMeta(
+    'pedidoId',
+  );
+  @override
+  late final GeneratedColumn<int> pedidoId = GeneratedColumn<int>(
+    'pedido_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES tabla_pedidos (id) ON DELETE CASCADE',
+    ),
+  );
+  static const VerificationMeta _comboIdMeta = const VerificationMeta(
+    'comboId',
+  );
+  @override
+  late final GeneratedColumn<int> comboId = GeneratedColumn<int>(
+    'combo_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES tabla_combos (id) ON DELETE RESTRICT',
+    ),
+  );
+  static const VerificationMeta _productoIdMeta = const VerificationMeta(
+    'productoId',
+  );
+  @override
+  late final GeneratedColumn<int> productoId = GeneratedColumn<int>(
+    'producto_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES tabla_productos (id) ON DELETE RESTRICT',
+    ),
+  );
+  static const VerificationMeta _nombreMeta = const VerificationMeta('nombre');
+  @override
+  late final GeneratedColumn<String> nombre = GeneratedColumn<String>(
+    'nombre',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _unidadMeta = const VerificationMeta('unidad');
+  @override
+  late final GeneratedColumn<String> unidad = GeneratedColumn<String>(
+    'unidad',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _cantidadMeta = const VerificationMeta(
+    'cantidad',
+  );
+  @override
+  late final GeneratedColumn<double> cantidad = GeneratedColumn<double>(
+    'cantidad',
+    aliasedName,
+    false,
+    type: DriftSqlType.double,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _precioUnitarioMeta = const VerificationMeta(
+    'precioUnitario',
+  );
+  @override
+  late final GeneratedColumn<double> precioUnitario = GeneratedColumn<double>(
+    'precio_unitario',
+    aliasedName,
+    false,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _subtotalMeta = const VerificationMeta(
+    'subtotal',
+  );
+  @override
+  late final GeneratedColumn<double> subtotal = GeneratedColumn<double>(
+    'subtotal',
+    aliasedName,
+    false,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    pedidoId,
+    comboId,
+    productoId,
+    nombre,
+    unidad,
+    cantidad,
+    precioUnitario,
+    subtotal,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'tabla_lineas_pedido';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<TablaLineasPedidoData> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('pedido_id')) {
+      context.handle(
+        _pedidoIdMeta,
+        pedidoId.isAcceptableOrUnknown(data['pedido_id']!, _pedidoIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_pedidoIdMeta);
+    }
+    if (data.containsKey('combo_id')) {
+      context.handle(
+        _comboIdMeta,
+        comboId.isAcceptableOrUnknown(data['combo_id']!, _comboIdMeta),
+      );
+    }
+    if (data.containsKey('producto_id')) {
+      context.handle(
+        _productoIdMeta,
+        productoId.isAcceptableOrUnknown(data['producto_id']!, _productoIdMeta),
+      );
+    }
+    if (data.containsKey('nombre')) {
+      context.handle(
+        _nombreMeta,
+        nombre.isAcceptableOrUnknown(data['nombre']!, _nombreMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nombreMeta);
+    }
+    if (data.containsKey('unidad')) {
+      context.handle(
+        _unidadMeta,
+        unidad.isAcceptableOrUnknown(data['unidad']!, _unidadMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_unidadMeta);
+    }
+    if (data.containsKey('cantidad')) {
+      context.handle(
+        _cantidadMeta,
+        cantidad.isAcceptableOrUnknown(data['cantidad']!, _cantidadMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_cantidadMeta);
+    }
+    if (data.containsKey('precio_unitario')) {
+      context.handle(
+        _precioUnitarioMeta,
+        precioUnitario.isAcceptableOrUnknown(
+          data['precio_unitario']!,
+          _precioUnitarioMeta,
+        ),
+      );
+    }
+    if (data.containsKey('subtotal')) {
+      context.handle(
+        _subtotalMeta,
+        subtotal.isAcceptableOrUnknown(data['subtotal']!, _subtotalMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  TablaLineasPedidoData map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return TablaLineasPedidoData(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      pedidoId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}pedido_id'],
+      )!,
+      comboId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}combo_id'],
+      ),
+      productoId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}producto_id'],
+      ),
+      nombre: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}nombre'],
+      )!,
+      unidad: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}unidad'],
+      )!,
+      cantidad: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}cantidad'],
+      )!,
+      precioUnitario: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}precio_unitario'],
+      )!,
+      subtotal: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}subtotal'],
+      )!,
+    );
+  }
+
+  @override
+  $TablaLineasPedidoTable createAlias(String alias) {
+    return $TablaLineasPedidoTable(attachedDatabase, alias);
+  }
+}
+
+class TablaLineasPedidoData extends DataClass
+    implements Insertable<TablaLineasPedidoData> {
+  final int id;
+  final int pedidoId;
+  final int? comboId;
+  final int? productoId;
+  final String nombre;
+  final String unidad;
+  final double cantidad;
+  final double precioUnitario;
+  final double subtotal;
+  const TablaLineasPedidoData({
+    required this.id,
+    required this.pedidoId,
+    this.comboId,
+    this.productoId,
+    required this.nombre,
+    required this.unidad,
+    required this.cantidad,
+    required this.precioUnitario,
+    required this.subtotal,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['pedido_id'] = Variable<int>(pedidoId);
+    if (!nullToAbsent || comboId != null) {
+      map['combo_id'] = Variable<int>(comboId);
+    }
+    if (!nullToAbsent || productoId != null) {
+      map['producto_id'] = Variable<int>(productoId);
+    }
+    map['nombre'] = Variable<String>(nombre);
+    map['unidad'] = Variable<String>(unidad);
+    map['cantidad'] = Variable<double>(cantidad);
+    map['precio_unitario'] = Variable<double>(precioUnitario);
+    map['subtotal'] = Variable<double>(subtotal);
+    return map;
+  }
+
+  TablaLineasPedidoCompanion toCompanion(bool nullToAbsent) {
+    return TablaLineasPedidoCompanion(
+      id: Value(id),
+      pedidoId: Value(pedidoId),
+      comboId: comboId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(comboId),
+      productoId: productoId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(productoId),
+      nombre: Value(nombre),
+      unidad: Value(unidad),
+      cantidad: Value(cantidad),
+      precioUnitario: Value(precioUnitario),
+      subtotal: Value(subtotal),
+    );
+  }
+
+  factory TablaLineasPedidoData.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return TablaLineasPedidoData(
+      id: serializer.fromJson<int>(json['id']),
+      pedidoId: serializer.fromJson<int>(json['pedidoId']),
+      comboId: serializer.fromJson<int?>(json['comboId']),
+      productoId: serializer.fromJson<int?>(json['productoId']),
+      nombre: serializer.fromJson<String>(json['nombre']),
+      unidad: serializer.fromJson<String>(json['unidad']),
+      cantidad: serializer.fromJson<double>(json['cantidad']),
+      precioUnitario: serializer.fromJson<double>(json['precioUnitario']),
+      subtotal: serializer.fromJson<double>(json['subtotal']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'pedidoId': serializer.toJson<int>(pedidoId),
+      'comboId': serializer.toJson<int?>(comboId),
+      'productoId': serializer.toJson<int?>(productoId),
+      'nombre': serializer.toJson<String>(nombre),
+      'unidad': serializer.toJson<String>(unidad),
+      'cantidad': serializer.toJson<double>(cantidad),
+      'precioUnitario': serializer.toJson<double>(precioUnitario),
+      'subtotal': serializer.toJson<double>(subtotal),
+    };
+  }
+
+  TablaLineasPedidoData copyWith({
+    int? id,
+    int? pedidoId,
+    Value<int?> comboId = const Value.absent(),
+    Value<int?> productoId = const Value.absent(),
+    String? nombre,
+    String? unidad,
+    double? cantidad,
+    double? precioUnitario,
+    double? subtotal,
+  }) => TablaLineasPedidoData(
+    id: id ?? this.id,
+    pedidoId: pedidoId ?? this.pedidoId,
+    comboId: comboId.present ? comboId.value : this.comboId,
+    productoId: productoId.present ? productoId.value : this.productoId,
+    nombre: nombre ?? this.nombre,
+    unidad: unidad ?? this.unidad,
+    cantidad: cantidad ?? this.cantidad,
+    precioUnitario: precioUnitario ?? this.precioUnitario,
+    subtotal: subtotal ?? this.subtotal,
+  );
+  TablaLineasPedidoData copyWithCompanion(TablaLineasPedidoCompanion data) {
+    return TablaLineasPedidoData(
+      id: data.id.present ? data.id.value : this.id,
+      pedidoId: data.pedidoId.present ? data.pedidoId.value : this.pedidoId,
+      comboId: data.comboId.present ? data.comboId.value : this.comboId,
+      productoId: data.productoId.present
+          ? data.productoId.value
+          : this.productoId,
+      nombre: data.nombre.present ? data.nombre.value : this.nombre,
+      unidad: data.unidad.present ? data.unidad.value : this.unidad,
+      cantidad: data.cantidad.present ? data.cantidad.value : this.cantidad,
+      precioUnitario: data.precioUnitario.present
+          ? data.precioUnitario.value
+          : this.precioUnitario,
+      subtotal: data.subtotal.present ? data.subtotal.value : this.subtotal,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('TablaLineasPedidoData(')
+          ..write('id: $id, ')
+          ..write('pedidoId: $pedidoId, ')
+          ..write('comboId: $comboId, ')
+          ..write('productoId: $productoId, ')
+          ..write('nombre: $nombre, ')
+          ..write('unidad: $unidad, ')
+          ..write('cantidad: $cantidad, ')
+          ..write('precioUnitario: $precioUnitario, ')
+          ..write('subtotal: $subtotal')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    pedidoId,
+    comboId,
+    productoId,
+    nombre,
+    unidad,
+    cantidad,
+    precioUnitario,
+    subtotal,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is TablaLineasPedidoData &&
+          other.id == this.id &&
+          other.pedidoId == this.pedidoId &&
+          other.comboId == this.comboId &&
+          other.productoId == this.productoId &&
+          other.nombre == this.nombre &&
+          other.unidad == this.unidad &&
+          other.cantidad == this.cantidad &&
+          other.precioUnitario == this.precioUnitario &&
+          other.subtotal == this.subtotal);
+}
+
+class TablaLineasPedidoCompanion
+    extends UpdateCompanion<TablaLineasPedidoData> {
+  final Value<int> id;
+  final Value<int> pedidoId;
+  final Value<int?> comboId;
+  final Value<int?> productoId;
+  final Value<String> nombre;
+  final Value<String> unidad;
+  final Value<double> cantidad;
+  final Value<double> precioUnitario;
+  final Value<double> subtotal;
+  const TablaLineasPedidoCompanion({
+    this.id = const Value.absent(),
+    this.pedidoId = const Value.absent(),
+    this.comboId = const Value.absent(),
+    this.productoId = const Value.absent(),
+    this.nombre = const Value.absent(),
+    this.unidad = const Value.absent(),
+    this.cantidad = const Value.absent(),
+    this.precioUnitario = const Value.absent(),
+    this.subtotal = const Value.absent(),
+  });
+  TablaLineasPedidoCompanion.insert({
+    this.id = const Value.absent(),
+    required int pedidoId,
+    this.comboId = const Value.absent(),
+    this.productoId = const Value.absent(),
+    required String nombre,
+    required String unidad,
+    required double cantidad,
+    this.precioUnitario = const Value.absent(),
+    this.subtotal = const Value.absent(),
+  }) : pedidoId = Value(pedidoId),
+       nombre = Value(nombre),
+       unidad = Value(unidad),
+       cantidad = Value(cantidad);
+  static Insertable<TablaLineasPedidoData> custom({
+    Expression<int>? id,
+    Expression<int>? pedidoId,
+    Expression<int>? comboId,
+    Expression<int>? productoId,
+    Expression<String>? nombre,
+    Expression<String>? unidad,
+    Expression<double>? cantidad,
+    Expression<double>? precioUnitario,
+    Expression<double>? subtotal,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (pedidoId != null) 'pedido_id': pedidoId,
+      if (comboId != null) 'combo_id': comboId,
+      if (productoId != null) 'producto_id': productoId,
+      if (nombre != null) 'nombre': nombre,
+      if (unidad != null) 'unidad': unidad,
+      if (cantidad != null) 'cantidad': cantidad,
+      if (precioUnitario != null) 'precio_unitario': precioUnitario,
+      if (subtotal != null) 'subtotal': subtotal,
+    });
+  }
+
+  TablaLineasPedidoCompanion copyWith({
+    Value<int>? id,
+    Value<int>? pedidoId,
+    Value<int?>? comboId,
+    Value<int?>? productoId,
+    Value<String>? nombre,
+    Value<String>? unidad,
+    Value<double>? cantidad,
+    Value<double>? precioUnitario,
+    Value<double>? subtotal,
+  }) {
+    return TablaLineasPedidoCompanion(
+      id: id ?? this.id,
+      pedidoId: pedidoId ?? this.pedidoId,
+      comboId: comboId ?? this.comboId,
+      productoId: productoId ?? this.productoId,
+      nombre: nombre ?? this.nombre,
+      unidad: unidad ?? this.unidad,
+      cantidad: cantidad ?? this.cantidad,
+      precioUnitario: precioUnitario ?? this.precioUnitario,
+      subtotal: subtotal ?? this.subtotal,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (pedidoId.present) {
+      map['pedido_id'] = Variable<int>(pedidoId.value);
+    }
+    if (comboId.present) {
+      map['combo_id'] = Variable<int>(comboId.value);
+    }
+    if (productoId.present) {
+      map['producto_id'] = Variable<int>(productoId.value);
+    }
+    if (nombre.present) {
+      map['nombre'] = Variable<String>(nombre.value);
+    }
+    if (unidad.present) {
+      map['unidad'] = Variable<String>(unidad.value);
+    }
+    if (cantidad.present) {
+      map['cantidad'] = Variable<double>(cantidad.value);
+    }
+    if (precioUnitario.present) {
+      map['precio_unitario'] = Variable<double>(precioUnitario.value);
+    }
+    if (subtotal.present) {
+      map['subtotal'] = Variable<double>(subtotal.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('TablaLineasPedidoCompanion(')
+          ..write('id: $id, ')
+          ..write('pedidoId: $pedidoId, ')
+          ..write('comboId: $comboId, ')
+          ..write('productoId: $productoId, ')
+          ..write('nombre: $nombre, ')
+          ..write('unidad: $unidad, ')
+          ..write('cantidad: $cantidad, ')
+          ..write('precioUnitario: $precioUnitario, ')
+          ..write('subtotal: $subtotal')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$BaseDeDatos extends GeneratedDatabase {
   _$BaseDeDatos(QueryExecutor e) : super(e);
   $BaseDeDatosManager get managers => $BaseDeDatosManager(this);
@@ -3211,6 +4461,9 @@ abstract class _$BaseDeDatos extends GeneratedDatabase {
   late final $TablaComprasTable tablaCompras = $TablaComprasTable(this);
   late final $TablaLineasCompraTable tablaLineasCompra =
       $TablaLineasCompraTable(this);
+  late final $TablaPedidosTable tablaPedidos = $TablaPedidosTable(this);
+  late final $TablaLineasPedidoTable tablaLineasPedido =
+      $TablaLineasPedidoTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -3224,6 +4477,8 @@ abstract class _$BaseDeDatos extends GeneratedDatabase {
     tablaLineasVenta,
     tablaCompras,
     tablaLineasCompra,
+    tablaPedidos,
+    tablaLineasPedido,
   ];
   @override
   StreamQueryUpdateRules get streamUpdateRules => const StreamQueryUpdateRules([
@@ -3243,17 +4498,17 @@ abstract class _$BaseDeDatos extends GeneratedDatabase {
     ),
     WritePropagation(
       on: TableUpdateQuery.onTableName(
-        'tabla_ventas',
-        limitUpdateKind: UpdateKind.delete,
-      ),
-      result: [TableUpdate('tabla_lineas_venta', kind: UpdateKind.delete)],
-    ),
-    WritePropagation(
-      on: TableUpdateQuery.onTableName(
         'tabla_compras',
         limitUpdateKind: UpdateKind.delete,
       ),
       result: [TableUpdate('tabla_lineas_compra', kind: UpdateKind.delete)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'tabla_pedidos',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('tabla_lineas_pedido', kind: UpdateKind.delete)],
     ),
   ]);
 }
@@ -3360,6 +4615,33 @@ final class $$TablaProductosTableReferences
 
     final cache = $_typedResult.readTableOrNull(
       _tablaLineasCompraRefsTable($_db),
+    );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<
+    $TablaLineasPedidoTable,
+    List<TablaLineasPedidoData>
+  >
+  _tablaLineasPedidoRefsTable(_$BaseDeDatos db) =>
+      MultiTypedResultKey.fromTable(
+        db.tablaLineasPedido,
+        aliasName: $_aliasNameGenerator(
+          db.tablaProductos.id,
+          db.tablaLineasPedido.productoId,
+        ),
+      );
+
+  $$TablaLineasPedidoTableProcessedTableManager get tablaLineasPedidoRefs {
+    final manager = $$TablaLineasPedidoTableTableManager(
+      $_db,
+      $_db.tablaLineasPedido,
+    ).filter((f) => f.productoId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(
+      _tablaLineasPedidoRefsTable($_db),
     );
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: cache),
@@ -3492,6 +4774,31 @@ class $$TablaProductosTableFilterComposer
           }) => $$TablaLineasCompraTableFilterComposer(
             $db: $db,
             $table: $db.tablaLineasCompra,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> tablaLineasPedidoRefs(
+    Expression<bool> Function($$TablaLineasPedidoTableFilterComposer f) f,
+  ) {
+    final $$TablaLineasPedidoTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.tablaLineasPedido,
+      getReferencedColumn: (t) => t.productoId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$TablaLineasPedidoTableFilterComposer(
+            $db: $db,
+            $table: $db.tablaLineasPedido,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -3682,6 +4989,32 @@ class $$TablaProductosTableAnnotationComposer
         );
     return f(composer);
   }
+
+  Expression<T> tablaLineasPedidoRefs<T extends Object>(
+    Expression<T> Function($$TablaLineasPedidoTableAnnotationComposer a) f,
+  ) {
+    final $$TablaLineasPedidoTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.id,
+          referencedTable: $db.tablaLineasPedido,
+          getReferencedColumn: (t) => t.productoId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$TablaLineasPedidoTableAnnotationComposer(
+                $db: $db,
+                $table: $db.tablaLineasPedido,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
+  }
 }
 
 class $$TablaProductosTableTableManager
@@ -3701,6 +5034,7 @@ class $$TablaProductosTableTableManager
             bool tablaMovimientosRefs,
             bool tablaComponentesRefs,
             bool tablaLineasCompraRefs,
+            bool tablaLineasPedidoRefs,
           })
         > {
   $$TablaProductosTableTableManager(
@@ -3777,6 +5111,7 @@ class $$TablaProductosTableTableManager
                 tablaMovimientosRefs = false,
                 tablaComponentesRefs = false,
                 tablaLineasCompraRefs = false,
+                tablaLineasPedidoRefs = false,
               }) {
                 return PrefetchHooks(
                   db: db,
@@ -3784,6 +5119,7 @@ class $$TablaProductosTableTableManager
                     if (tablaMovimientosRefs) db.tablaMovimientos,
                     if (tablaComponentesRefs) db.tablaComponentes,
                     if (tablaLineasCompraRefs) db.tablaLineasCompra,
+                    if (tablaLineasPedidoRefs) db.tablaLineasPedido,
                   ],
                   addJoins: null,
                   getPrefetchedDataCallback: (items) async {
@@ -3851,6 +5187,27 @@ class $$TablaProductosTableTableManager
                               ),
                           typedResults: items,
                         ),
+                      if (tablaLineasPedidoRefs)
+                        await $_getPrefetchedData<
+                          TablaProducto,
+                          $TablaProductosTable,
+                          TablaLineasPedidoData
+                        >(
+                          currentTable: table,
+                          referencedTable: $$TablaProductosTableReferences
+                              ._tablaLineasPedidoRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$TablaProductosTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).tablaLineasPedidoRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.productoId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
                     ];
                   },
                 );
@@ -3875,6 +5232,7 @@ typedef $$TablaProductosTableProcessedTableManager =
         bool tablaMovimientosRefs,
         bool tablaComponentesRefs,
         bool tablaLineasCompraRefs,
+        bool tablaLineasPedidoRefs,
       })
     >;
 typedef $$TablaMovimientosTableCreateCompanionBuilder =
@@ -4286,23 +5644,27 @@ final class $$TablaCombosTableReferences
     );
   }
 
-  static MultiTypedResultKey<$TablaLineasVentaTable, List<TablaLineasVentaData>>
-  _tablaLineasVentaRefsTable(_$BaseDeDatos db) => MultiTypedResultKey.fromTable(
-    db.tablaLineasVenta,
-    aliasName: $_aliasNameGenerator(
-      db.tablaCombos.id,
-      db.tablaLineasVenta.comboId,
-    ),
-  );
+  static MultiTypedResultKey<
+    $TablaLineasPedidoTable,
+    List<TablaLineasPedidoData>
+  >
+  _tablaLineasPedidoRefsTable(_$BaseDeDatos db) =>
+      MultiTypedResultKey.fromTable(
+        db.tablaLineasPedido,
+        aliasName: $_aliasNameGenerator(
+          db.tablaCombos.id,
+          db.tablaLineasPedido.comboId,
+        ),
+      );
 
-  $$TablaLineasVentaTableProcessedTableManager get tablaLineasVentaRefs {
-    final manager = $$TablaLineasVentaTableTableManager(
+  $$TablaLineasPedidoTableProcessedTableManager get tablaLineasPedidoRefs {
+    final manager = $$TablaLineasPedidoTableTableManager(
       $_db,
-      $_db.tablaLineasVenta,
+      $_db.tablaLineasPedido,
     ).filter((f) => f.comboId.id.sqlEquals($_itemColumn<int>('id')!));
 
     final cache = $_typedResult.readTableOrNull(
-      _tablaLineasVentaRefsTable($_db),
+      _tablaLineasPedidoRefsTable($_db),
     );
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: cache),
@@ -4369,22 +5731,22 @@ class $$TablaCombosTableFilterComposer
     return f(composer);
   }
 
-  Expression<bool> tablaLineasVentaRefs(
-    Expression<bool> Function($$TablaLineasVentaTableFilterComposer f) f,
+  Expression<bool> tablaLineasPedidoRefs(
+    Expression<bool> Function($$TablaLineasPedidoTableFilterComposer f) f,
   ) {
-    final $$TablaLineasVentaTableFilterComposer composer = $composerBuilder(
+    final $$TablaLineasPedidoTableFilterComposer composer = $composerBuilder(
       composer: this,
       getCurrentColumn: (t) => t.id,
-      referencedTable: $db.tablaLineasVenta,
+      referencedTable: $db.tablaLineasPedido,
       getReferencedColumn: (t) => t.comboId,
       builder:
           (
             joinBuilder, {
             $addJoinBuilderToRootComposer,
             $removeJoinBuilderFromRootComposer,
-          }) => $$TablaLineasVentaTableFilterComposer(
+          }) => $$TablaLineasPedidoTableFilterComposer(
             $db: $db,
-            $table: $db.tablaLineasVenta,
+            $table: $db.tablaLineasPedido,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -4481,28 +5843,29 @@ class $$TablaCombosTableAnnotationComposer
     return f(composer);
   }
 
-  Expression<T> tablaLineasVentaRefs<T extends Object>(
-    Expression<T> Function($$TablaLineasVentaTableAnnotationComposer a) f,
+  Expression<T> tablaLineasPedidoRefs<T extends Object>(
+    Expression<T> Function($$TablaLineasPedidoTableAnnotationComposer a) f,
   ) {
-    final $$TablaLineasVentaTableAnnotationComposer composer = $composerBuilder(
-      composer: this,
-      getCurrentColumn: (t) => t.id,
-      referencedTable: $db.tablaLineasVenta,
-      getReferencedColumn: (t) => t.comboId,
-      builder:
-          (
-            joinBuilder, {
-            $addJoinBuilderToRootComposer,
-            $removeJoinBuilderFromRootComposer,
-          }) => $$TablaLineasVentaTableAnnotationComposer(
-            $db: $db,
-            $table: $db.tablaLineasVenta,
-            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
-            joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
+    final $$TablaLineasPedidoTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.id,
+          referencedTable: $db.tablaLineasPedido,
+          getReferencedColumn: (t) => t.comboId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
                 $removeJoinBuilderFromRootComposer,
-          ),
-    );
+              }) => $$TablaLineasPedidoTableAnnotationComposer(
+                $db: $db,
+                $table: $db.tablaLineasPedido,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
     return f(composer);
   }
 }
@@ -4522,7 +5885,7 @@ class $$TablaCombosTableTableManager
           TablaCombo,
           PrefetchHooks Function({
             bool tablaComponentesRefs,
-            bool tablaLineasVentaRefs,
+            bool tablaLineasPedidoRefs,
           })
         > {
   $$TablaCombosTableTableManager(_$BaseDeDatos db, $TablaCombosTable table)
@@ -4573,12 +5936,12 @@ class $$TablaCombosTableTableManager
               )
               .toList(),
           prefetchHooksCallback:
-              ({tablaComponentesRefs = false, tablaLineasVentaRefs = false}) {
+              ({tablaComponentesRefs = false, tablaLineasPedidoRefs = false}) {
                 return PrefetchHooks(
                   db: db,
                   explicitlyWatchedTables: [
                     if (tablaComponentesRefs) db.tablaComponentes,
-                    if (tablaLineasVentaRefs) db.tablaLineasVenta,
+                    if (tablaLineasPedidoRefs) db.tablaLineasPedido,
                   ],
                   addJoins: null,
                   getPrefetchedDataCallback: (items) async {
@@ -4604,21 +5967,21 @@ class $$TablaCombosTableTableManager
                               ),
                           typedResults: items,
                         ),
-                      if (tablaLineasVentaRefs)
+                      if (tablaLineasPedidoRefs)
                         await $_getPrefetchedData<
                           TablaCombo,
                           $TablaCombosTable,
-                          TablaLineasVentaData
+                          TablaLineasPedidoData
                         >(
                           currentTable: table,
                           referencedTable: $$TablaCombosTableReferences
-                              ._tablaLineasVentaRefsTable(db),
+                              ._tablaLineasPedidoRefsTable(db),
                           managerFromTypedResult: (p0) =>
                               $$TablaCombosTableReferences(
                                 db,
                                 table,
                                 p0,
-                              ).tablaLineasVentaRefs,
+                              ).tablaLineasPedidoRefs,
                           referencedItemsForCurrentItem:
                               (item, referencedItems) => referencedItems.where(
                                 (e) => e.comboId == item.id,
@@ -4647,7 +6010,7 @@ typedef $$TablaCombosTableProcessedTableManager =
       TablaCombo,
       PrefetchHooks Function({
         bool tablaComponentesRefs,
-        bool tablaLineasVentaRefs,
+        bool tablaLineasPedidoRefs,
       })
     >;
 typedef $$TablaComponentesTableCreateCompanionBuilder =
@@ -5065,24 +6428,19 @@ final class $$TablaVentasTableReferences
     extends BaseReferences<_$BaseDeDatos, $TablaVentasTable, TablaVenta> {
   $$TablaVentasTableReferences(super.$_db, super.$_table, super.$_typedResult);
 
-  static MultiTypedResultKey<$TablaLineasVentaTable, List<TablaLineasVentaData>>
-  _tablaLineasVentaRefsTable(_$BaseDeDatos db) => MultiTypedResultKey.fromTable(
-    db.tablaLineasVenta,
-    aliasName: $_aliasNameGenerator(
-      db.tablaVentas.id,
-      db.tablaLineasVenta.ventaId,
-    ),
+  static MultiTypedResultKey<$TablaPedidosTable, List<TablaPedido>>
+  _tablaPedidosRefsTable(_$BaseDeDatos db) => MultiTypedResultKey.fromTable(
+    db.tablaPedidos,
+    aliasName: $_aliasNameGenerator(db.tablaVentas.id, db.tablaPedidos.ventaId),
   );
 
-  $$TablaLineasVentaTableProcessedTableManager get tablaLineasVentaRefs {
-    final manager = $$TablaLineasVentaTableTableManager(
+  $$TablaPedidosTableProcessedTableManager get tablaPedidosRefs {
+    final manager = $$TablaPedidosTableTableManager(
       $_db,
-      $_db.tablaLineasVenta,
+      $_db.tablaPedidos,
     ).filter((f) => f.ventaId.id.sqlEquals($_itemColumn<int>('id')!));
 
-    final cache = $_typedResult.readTableOrNull(
-      _tablaLineasVentaRefsTable($_db),
-    );
+    final cache = $_typedResult.readTableOrNull(_tablaPedidosRefsTable($_db));
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: cache),
     );
@@ -5118,22 +6476,22 @@ class $$TablaVentasTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  Expression<bool> tablaLineasVentaRefs(
-    Expression<bool> Function($$TablaLineasVentaTableFilterComposer f) f,
+  Expression<bool> tablaPedidosRefs(
+    Expression<bool> Function($$TablaPedidosTableFilterComposer f) f,
   ) {
-    final $$TablaLineasVentaTableFilterComposer composer = $composerBuilder(
+    final $$TablaPedidosTableFilterComposer composer = $composerBuilder(
       composer: this,
       getCurrentColumn: (t) => t.id,
-      referencedTable: $db.tablaLineasVenta,
+      referencedTable: $db.tablaPedidos,
       getReferencedColumn: (t) => t.ventaId,
       builder:
           (
             joinBuilder, {
             $addJoinBuilderToRootComposer,
             $removeJoinBuilderFromRootComposer,
-          }) => $$TablaLineasVentaTableFilterComposer(
+          }) => $$TablaPedidosTableFilterComposer(
             $db: $db,
-            $table: $db.tablaLineasVenta,
+            $table: $db.tablaPedidos,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -5195,22 +6553,22 @@ class $$TablaVentasTableAnnotationComposer
   GeneratedColumn<String> get nota =>
       $composableBuilder(column: $table.nota, builder: (column) => column);
 
-  Expression<T> tablaLineasVentaRefs<T extends Object>(
-    Expression<T> Function($$TablaLineasVentaTableAnnotationComposer a) f,
+  Expression<T> tablaPedidosRefs<T extends Object>(
+    Expression<T> Function($$TablaPedidosTableAnnotationComposer a) f,
   ) {
-    final $$TablaLineasVentaTableAnnotationComposer composer = $composerBuilder(
+    final $$TablaPedidosTableAnnotationComposer composer = $composerBuilder(
       composer: this,
       getCurrentColumn: (t) => t.id,
-      referencedTable: $db.tablaLineasVenta,
+      referencedTable: $db.tablaPedidos,
       getReferencedColumn: (t) => t.ventaId,
       builder:
           (
             joinBuilder, {
             $addJoinBuilderToRootComposer,
             $removeJoinBuilderFromRootComposer,
-          }) => $$TablaLineasVentaTableAnnotationComposer(
+          }) => $$TablaPedidosTableAnnotationComposer(
             $db: $db,
-            $table: $db.tablaLineasVenta,
+            $table: $db.tablaPedidos,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -5234,7 +6592,7 @@ class $$TablaVentasTableTableManager
           $$TablaVentasTableUpdateCompanionBuilder,
           (TablaVenta, $$TablaVentasTableReferences),
           TablaVenta,
-          PrefetchHooks Function({bool tablaLineasVentaRefs})
+          PrefetchHooks Function({bool tablaPedidosRefs})
         > {
   $$TablaVentasTableTableManager(_$BaseDeDatos db, $TablaVentasTable table)
     : super(
@@ -5279,30 +6637,28 @@ class $$TablaVentasTableTableManager
                 ),
               )
               .toList(),
-          prefetchHooksCallback: ({tablaLineasVentaRefs = false}) {
+          prefetchHooksCallback: ({tablaPedidosRefs = false}) {
             return PrefetchHooks(
               db: db,
-              explicitlyWatchedTables: [
-                if (tablaLineasVentaRefs) db.tablaLineasVenta,
-              ],
+              explicitlyWatchedTables: [if (tablaPedidosRefs) db.tablaPedidos],
               addJoins: null,
               getPrefetchedDataCallback: (items) async {
                 return [
-                  if (tablaLineasVentaRefs)
+                  if (tablaPedidosRefs)
                     await $_getPrefetchedData<
                       TablaVenta,
                       $TablaVentasTable,
-                      TablaLineasVentaData
+                      TablaPedido
                     >(
                       currentTable: table,
                       referencedTable: $$TablaVentasTableReferences
-                          ._tablaLineasVentaRefsTable(db),
+                          ._tablaPedidosRefsTable(db),
                       managerFromTypedResult: (p0) =>
                           $$TablaVentasTableReferences(
                             db,
                             table,
                             p0,
-                          ).tablaLineasVentaRefs,
+                          ).tablaPedidosRefs,
                       referencedItemsForCurrentItem: (item, referencedItems) =>
                           referencedItems.where((e) => e.ventaId == item.id),
                       typedResults: items,
@@ -5327,78 +6683,28 @@ typedef $$TablaVentasTableProcessedTableManager =
       $$TablaVentasTableUpdateCompanionBuilder,
       (TablaVenta, $$TablaVentasTableReferences),
       TablaVenta,
-      PrefetchHooks Function({bool tablaLineasVentaRefs})
+      PrefetchHooks Function({bool tablaPedidosRefs})
     >;
 typedef $$TablaLineasVentaTableCreateCompanionBuilder =
     TablaLineasVentaCompanion Function({
       Value<int> id,
       required int ventaId,
       required int comboId,
+      Value<int?> productoId,
       required double cantidad,
-      Value<double> precioUnitario,
-      Value<double> subtotal,
+      required double precioUnitario,
+      required double subtotal,
     });
 typedef $$TablaLineasVentaTableUpdateCompanionBuilder =
     TablaLineasVentaCompanion Function({
       Value<int> id,
       Value<int> ventaId,
       Value<int> comboId,
+      Value<int?> productoId,
       Value<double> cantidad,
       Value<double> precioUnitario,
       Value<double> subtotal,
     });
-
-final class $$TablaLineasVentaTableReferences
-    extends
-        BaseReferences<
-          _$BaseDeDatos,
-          $TablaLineasVentaTable,
-          TablaLineasVentaData
-        > {
-  $$TablaLineasVentaTableReferences(
-    super.$_db,
-    super.$_table,
-    super.$_typedResult,
-  );
-
-  static $TablaVentasTable _ventaIdTable(_$BaseDeDatos db) =>
-      db.tablaVentas.createAlias(
-        $_aliasNameGenerator(db.tablaLineasVenta.ventaId, db.tablaVentas.id),
-      );
-
-  $$TablaVentasTableProcessedTableManager get ventaId {
-    final $_column = $_itemColumn<int>('venta_id')!;
-
-    final manager = $$TablaVentasTableTableManager(
-      $_db,
-      $_db.tablaVentas,
-    ).filter((f) => f.id.sqlEquals($_column));
-    final item = $_typedResult.readTableOrNull(_ventaIdTable($_db));
-    if (item == null) return manager;
-    return ProcessedTableManager(
-      manager.$state.copyWith(prefetchedData: [item]),
-    );
-  }
-
-  static $TablaCombosTable _comboIdTable(_$BaseDeDatos db) =>
-      db.tablaCombos.createAlias(
-        $_aliasNameGenerator(db.tablaLineasVenta.comboId, db.tablaCombos.id),
-      );
-
-  $$TablaCombosTableProcessedTableManager get comboId {
-    final $_column = $_itemColumn<int>('combo_id')!;
-
-    final manager = $$TablaCombosTableTableManager(
-      $_db,
-      $_db.tablaCombos,
-    ).filter((f) => f.id.sqlEquals($_column));
-    final item = $_typedResult.readTableOrNull(_comboIdTable($_db));
-    if (item == null) return manager;
-    return ProcessedTableManager(
-      manager.$state.copyWith(prefetchedData: [item]),
-    );
-  }
-}
 
 class $$TablaLineasVentaTableFilterComposer
     extends Composer<_$BaseDeDatos, $TablaLineasVentaTable> {
@@ -5411,6 +6717,21 @@ class $$TablaLineasVentaTableFilterComposer
   });
   ColumnFilters<int> get id => $composableBuilder(
     column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get ventaId => $composableBuilder(
+    column: $table.ventaId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get comboId => $composableBuilder(
+    column: $table.comboId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get productoId => $composableBuilder(
+    column: $table.productoId,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -5428,52 +6749,6 @@ class $$TablaLineasVentaTableFilterComposer
     column: $table.subtotal,
     builder: (column) => ColumnFilters(column),
   );
-
-  $$TablaVentasTableFilterComposer get ventaId {
-    final $$TablaVentasTableFilterComposer composer = $composerBuilder(
-      composer: this,
-      getCurrentColumn: (t) => t.ventaId,
-      referencedTable: $db.tablaVentas,
-      getReferencedColumn: (t) => t.id,
-      builder:
-          (
-            joinBuilder, {
-            $addJoinBuilderToRootComposer,
-            $removeJoinBuilderFromRootComposer,
-          }) => $$TablaVentasTableFilterComposer(
-            $db: $db,
-            $table: $db.tablaVentas,
-            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
-            joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
-          ),
-    );
-    return composer;
-  }
-
-  $$TablaCombosTableFilterComposer get comboId {
-    final $$TablaCombosTableFilterComposer composer = $composerBuilder(
-      composer: this,
-      getCurrentColumn: (t) => t.comboId,
-      referencedTable: $db.tablaCombos,
-      getReferencedColumn: (t) => t.id,
-      builder:
-          (
-            joinBuilder, {
-            $addJoinBuilderToRootComposer,
-            $removeJoinBuilderFromRootComposer,
-          }) => $$TablaCombosTableFilterComposer(
-            $db: $db,
-            $table: $db.tablaCombos,
-            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
-            joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
-          ),
-    );
-    return composer;
-  }
 }
 
 class $$TablaLineasVentaTableOrderingComposer
@@ -5487,6 +6762,21 @@ class $$TablaLineasVentaTableOrderingComposer
   });
   ColumnOrderings<int> get id => $composableBuilder(
     column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get ventaId => $composableBuilder(
+    column: $table.ventaId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get comboId => $composableBuilder(
+    column: $table.comboId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get productoId => $composableBuilder(
+    column: $table.productoId,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -5504,52 +6794,6 @@ class $$TablaLineasVentaTableOrderingComposer
     column: $table.subtotal,
     builder: (column) => ColumnOrderings(column),
   );
-
-  $$TablaVentasTableOrderingComposer get ventaId {
-    final $$TablaVentasTableOrderingComposer composer = $composerBuilder(
-      composer: this,
-      getCurrentColumn: (t) => t.ventaId,
-      referencedTable: $db.tablaVentas,
-      getReferencedColumn: (t) => t.id,
-      builder:
-          (
-            joinBuilder, {
-            $addJoinBuilderToRootComposer,
-            $removeJoinBuilderFromRootComposer,
-          }) => $$TablaVentasTableOrderingComposer(
-            $db: $db,
-            $table: $db.tablaVentas,
-            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
-            joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
-          ),
-    );
-    return composer;
-  }
-
-  $$TablaCombosTableOrderingComposer get comboId {
-    final $$TablaCombosTableOrderingComposer composer = $composerBuilder(
-      composer: this,
-      getCurrentColumn: (t) => t.comboId,
-      referencedTable: $db.tablaCombos,
-      getReferencedColumn: (t) => t.id,
-      builder:
-          (
-            joinBuilder, {
-            $addJoinBuilderToRootComposer,
-            $removeJoinBuilderFromRootComposer,
-          }) => $$TablaCombosTableOrderingComposer(
-            $db: $db,
-            $table: $db.tablaCombos,
-            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
-            joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
-          ),
-    );
-    return composer;
-  }
 }
 
 class $$TablaLineasVentaTableAnnotationComposer
@@ -5564,6 +6808,17 @@ class $$TablaLineasVentaTableAnnotationComposer
   GeneratedColumn<int> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
 
+  GeneratedColumn<int> get ventaId =>
+      $composableBuilder(column: $table.ventaId, builder: (column) => column);
+
+  GeneratedColumn<int> get comboId =>
+      $composableBuilder(column: $table.comboId, builder: (column) => column);
+
+  GeneratedColumn<int> get productoId => $composableBuilder(
+    column: $table.productoId,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<double> get cantidad =>
       $composableBuilder(column: $table.cantidad, builder: (column) => column);
 
@@ -5574,52 +6829,6 @@ class $$TablaLineasVentaTableAnnotationComposer
 
   GeneratedColumn<double> get subtotal =>
       $composableBuilder(column: $table.subtotal, builder: (column) => column);
-
-  $$TablaVentasTableAnnotationComposer get ventaId {
-    final $$TablaVentasTableAnnotationComposer composer = $composerBuilder(
-      composer: this,
-      getCurrentColumn: (t) => t.ventaId,
-      referencedTable: $db.tablaVentas,
-      getReferencedColumn: (t) => t.id,
-      builder:
-          (
-            joinBuilder, {
-            $addJoinBuilderToRootComposer,
-            $removeJoinBuilderFromRootComposer,
-          }) => $$TablaVentasTableAnnotationComposer(
-            $db: $db,
-            $table: $db.tablaVentas,
-            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
-            joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
-          ),
-    );
-    return composer;
-  }
-
-  $$TablaCombosTableAnnotationComposer get comboId {
-    final $$TablaCombosTableAnnotationComposer composer = $composerBuilder(
-      composer: this,
-      getCurrentColumn: (t) => t.comboId,
-      referencedTable: $db.tablaCombos,
-      getReferencedColumn: (t) => t.id,
-      builder:
-          (
-            joinBuilder, {
-            $addJoinBuilderToRootComposer,
-            $removeJoinBuilderFromRootComposer,
-          }) => $$TablaCombosTableAnnotationComposer(
-            $db: $db,
-            $table: $db.tablaCombos,
-            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
-            joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
-          ),
-    );
-    return composer;
-  }
 }
 
 class $$TablaLineasVentaTableTableManager
@@ -5633,9 +6842,16 @@ class $$TablaLineasVentaTableTableManager
           $$TablaLineasVentaTableAnnotationComposer,
           $$TablaLineasVentaTableCreateCompanionBuilder,
           $$TablaLineasVentaTableUpdateCompanionBuilder,
-          (TablaLineasVentaData, $$TablaLineasVentaTableReferences),
+          (
+            TablaLineasVentaData,
+            BaseReferences<
+              _$BaseDeDatos,
+              $TablaLineasVentaTable,
+              TablaLineasVentaData
+            >,
+          ),
           TablaLineasVentaData,
-          PrefetchHooks Function({bool ventaId, bool comboId})
+          PrefetchHooks Function()
         > {
   $$TablaLineasVentaTableTableManager(
     _$BaseDeDatos db,
@@ -5655,6 +6871,7 @@ class $$TablaLineasVentaTableTableManager
                 Value<int> id = const Value.absent(),
                 Value<int> ventaId = const Value.absent(),
                 Value<int> comboId = const Value.absent(),
+                Value<int?> productoId = const Value.absent(),
                 Value<double> cantidad = const Value.absent(),
                 Value<double> precioUnitario = const Value.absent(),
                 Value<double> subtotal = const Value.absent(),
@@ -5662,6 +6879,7 @@ class $$TablaLineasVentaTableTableManager
                 id: id,
                 ventaId: ventaId,
                 comboId: comboId,
+                productoId: productoId,
                 cantidad: cantidad,
                 precioUnitario: precioUnitario,
                 subtotal: subtotal,
@@ -5671,83 +6889,23 @@ class $$TablaLineasVentaTableTableManager
                 Value<int> id = const Value.absent(),
                 required int ventaId,
                 required int comboId,
+                Value<int?> productoId = const Value.absent(),
                 required double cantidad,
-                Value<double> precioUnitario = const Value.absent(),
-                Value<double> subtotal = const Value.absent(),
+                required double precioUnitario,
+                required double subtotal,
               }) => TablaLineasVentaCompanion.insert(
                 id: id,
                 ventaId: ventaId,
                 comboId: comboId,
+                productoId: productoId,
                 cantidad: cantidad,
                 precioUnitario: precioUnitario,
                 subtotal: subtotal,
               ),
           withReferenceMapper: (p0) => p0
-              .map(
-                (e) => (
-                  e.readTable(table),
-                  $$TablaLineasVentaTableReferences(db, table, e),
-                ),
-              )
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
               .toList(),
-          prefetchHooksCallback: ({ventaId = false, comboId = false}) {
-            return PrefetchHooks(
-              db: db,
-              explicitlyWatchedTables: [],
-              addJoins:
-                  <
-                    T extends TableManagerState<
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic
-                    >
-                  >(state) {
-                    if (ventaId) {
-                      state =
-                          state.withJoin(
-                                currentTable: table,
-                                currentColumn: table.ventaId,
-                                referencedTable:
-                                    $$TablaLineasVentaTableReferences
-                                        ._ventaIdTable(db),
-                                referencedColumn:
-                                    $$TablaLineasVentaTableReferences
-                                        ._ventaIdTable(db)
-                                        .id,
-                              )
-                              as T;
-                    }
-                    if (comboId) {
-                      state =
-                          state.withJoin(
-                                currentTable: table,
-                                currentColumn: table.comboId,
-                                referencedTable:
-                                    $$TablaLineasVentaTableReferences
-                                        ._comboIdTable(db),
-                                referencedColumn:
-                                    $$TablaLineasVentaTableReferences
-                                        ._comboIdTable(db)
-                                        .id,
-                              )
-                              as T;
-                    }
-
-                    return state;
-                  },
-              getPrefetchedDataCallback: (items) async {
-                return [];
-              },
-            );
-          },
+          prefetchHooksCallback: null,
         ),
       );
 }
@@ -5762,9 +6920,16 @@ typedef $$TablaLineasVentaTableProcessedTableManager =
       $$TablaLineasVentaTableAnnotationComposer,
       $$TablaLineasVentaTableCreateCompanionBuilder,
       $$TablaLineasVentaTableUpdateCompanionBuilder,
-      (TablaLineasVentaData, $$TablaLineasVentaTableReferences),
+      (
+        TablaLineasVentaData,
+        BaseReferences<
+          _$BaseDeDatos,
+          $TablaLineasVentaTable,
+          TablaLineasVentaData
+        >,
+      ),
       TablaLineasVentaData,
-      PrefetchHooks Function({bool ventaId, bool comboId})
+      PrefetchHooks Function()
     >;
 typedef $$TablaComprasTableCreateCompanionBuilder =
     TablaComprasCompanion Function({
@@ -6516,6 +7681,1133 @@ typedef $$TablaLineasCompraTableProcessedTableManager =
       TablaLineasCompraData,
       PrefetchHooks Function({bool compraId, bool productoId})
     >;
+typedef $$TablaPedidosTableCreateCompanionBuilder =
+    TablaPedidosCompanion Function({
+      Value<int> id,
+      Value<DateTime> fecha,
+      Value<String?> cliente,
+      Value<String?> nota,
+      Value<double> envioMonto,
+      Value<String> medioPago,
+      Value<String> estadoPago,
+      Value<String> estado,
+      Value<double> subtotal,
+      Value<double> total,
+      Value<int?> ventaId,
+    });
+typedef $$TablaPedidosTableUpdateCompanionBuilder =
+    TablaPedidosCompanion Function({
+      Value<int> id,
+      Value<DateTime> fecha,
+      Value<String?> cliente,
+      Value<String?> nota,
+      Value<double> envioMonto,
+      Value<String> medioPago,
+      Value<String> estadoPago,
+      Value<String> estado,
+      Value<double> subtotal,
+      Value<double> total,
+      Value<int?> ventaId,
+    });
+
+final class $$TablaPedidosTableReferences
+    extends BaseReferences<_$BaseDeDatos, $TablaPedidosTable, TablaPedido> {
+  $$TablaPedidosTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static $TablaVentasTable _ventaIdTable(_$BaseDeDatos db) =>
+      db.tablaVentas.createAlias(
+        $_aliasNameGenerator(db.tablaPedidos.ventaId, db.tablaVentas.id),
+      );
+
+  $$TablaVentasTableProcessedTableManager? get ventaId {
+    final $_column = $_itemColumn<int>('venta_id');
+    if ($_column == null) return null;
+    final manager = $$TablaVentasTableTableManager(
+      $_db,
+      $_db.tablaVentas,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_ventaIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static MultiTypedResultKey<
+    $TablaLineasPedidoTable,
+    List<TablaLineasPedidoData>
+  >
+  _tablaLineasPedidoRefsTable(_$BaseDeDatos db) =>
+      MultiTypedResultKey.fromTable(
+        db.tablaLineasPedido,
+        aliasName: $_aliasNameGenerator(
+          db.tablaPedidos.id,
+          db.tablaLineasPedido.pedidoId,
+        ),
+      );
+
+  $$TablaLineasPedidoTableProcessedTableManager get tablaLineasPedidoRefs {
+    final manager = $$TablaLineasPedidoTableTableManager(
+      $_db,
+      $_db.tablaLineasPedido,
+    ).filter((f) => f.pedidoId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(
+      _tablaLineasPedidoRefsTable($_db),
+    );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+}
+
+class $$TablaPedidosTableFilterComposer
+    extends Composer<_$BaseDeDatos, $TablaPedidosTable> {
+  $$TablaPedidosTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get fecha => $composableBuilder(
+    column: $table.fecha,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get cliente => $composableBuilder(
+    column: $table.cliente,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get nota => $composableBuilder(
+    column: $table.nota,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get envioMonto => $composableBuilder(
+    column: $table.envioMonto,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get medioPago => $composableBuilder(
+    column: $table.medioPago,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get estadoPago => $composableBuilder(
+    column: $table.estadoPago,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get estado => $composableBuilder(
+    column: $table.estado,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get subtotal => $composableBuilder(
+    column: $table.subtotal,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get total => $composableBuilder(
+    column: $table.total,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$TablaVentasTableFilterComposer get ventaId {
+    final $$TablaVentasTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.ventaId,
+      referencedTable: $db.tablaVentas,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$TablaVentasTableFilterComposer(
+            $db: $db,
+            $table: $db.tablaVentas,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  Expression<bool> tablaLineasPedidoRefs(
+    Expression<bool> Function($$TablaLineasPedidoTableFilterComposer f) f,
+  ) {
+    final $$TablaLineasPedidoTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.tablaLineasPedido,
+      getReferencedColumn: (t) => t.pedidoId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$TablaLineasPedidoTableFilterComposer(
+            $db: $db,
+            $table: $db.tablaLineasPedido,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+}
+
+class $$TablaPedidosTableOrderingComposer
+    extends Composer<_$BaseDeDatos, $TablaPedidosTable> {
+  $$TablaPedidosTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get fecha => $composableBuilder(
+    column: $table.fecha,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get cliente => $composableBuilder(
+    column: $table.cliente,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get nota => $composableBuilder(
+    column: $table.nota,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get envioMonto => $composableBuilder(
+    column: $table.envioMonto,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get medioPago => $composableBuilder(
+    column: $table.medioPago,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get estadoPago => $composableBuilder(
+    column: $table.estadoPago,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get estado => $composableBuilder(
+    column: $table.estado,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get subtotal => $composableBuilder(
+    column: $table.subtotal,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get total => $composableBuilder(
+    column: $table.total,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$TablaVentasTableOrderingComposer get ventaId {
+    final $$TablaVentasTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.ventaId,
+      referencedTable: $db.tablaVentas,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$TablaVentasTableOrderingComposer(
+            $db: $db,
+            $table: $db.tablaVentas,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$TablaPedidosTableAnnotationComposer
+    extends Composer<_$BaseDeDatos, $TablaPedidosTable> {
+  $$TablaPedidosTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get fecha =>
+      $composableBuilder(column: $table.fecha, builder: (column) => column);
+
+  GeneratedColumn<String> get cliente =>
+      $composableBuilder(column: $table.cliente, builder: (column) => column);
+
+  GeneratedColumn<String> get nota =>
+      $composableBuilder(column: $table.nota, builder: (column) => column);
+
+  GeneratedColumn<double> get envioMonto => $composableBuilder(
+    column: $table.envioMonto,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get medioPago =>
+      $composableBuilder(column: $table.medioPago, builder: (column) => column);
+
+  GeneratedColumn<String> get estadoPago => $composableBuilder(
+    column: $table.estadoPago,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get estado =>
+      $composableBuilder(column: $table.estado, builder: (column) => column);
+
+  GeneratedColumn<double> get subtotal =>
+      $composableBuilder(column: $table.subtotal, builder: (column) => column);
+
+  GeneratedColumn<double> get total =>
+      $composableBuilder(column: $table.total, builder: (column) => column);
+
+  $$TablaVentasTableAnnotationComposer get ventaId {
+    final $$TablaVentasTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.ventaId,
+      referencedTable: $db.tablaVentas,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$TablaVentasTableAnnotationComposer(
+            $db: $db,
+            $table: $db.tablaVentas,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  Expression<T> tablaLineasPedidoRefs<T extends Object>(
+    Expression<T> Function($$TablaLineasPedidoTableAnnotationComposer a) f,
+  ) {
+    final $$TablaLineasPedidoTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.id,
+          referencedTable: $db.tablaLineasPedido,
+          getReferencedColumn: (t) => t.pedidoId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$TablaLineasPedidoTableAnnotationComposer(
+                $db: $db,
+                $table: $db.tablaLineasPedido,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
+  }
+}
+
+class $$TablaPedidosTableTableManager
+    extends
+        RootTableManager<
+          _$BaseDeDatos,
+          $TablaPedidosTable,
+          TablaPedido,
+          $$TablaPedidosTableFilterComposer,
+          $$TablaPedidosTableOrderingComposer,
+          $$TablaPedidosTableAnnotationComposer,
+          $$TablaPedidosTableCreateCompanionBuilder,
+          $$TablaPedidosTableUpdateCompanionBuilder,
+          (TablaPedido, $$TablaPedidosTableReferences),
+          TablaPedido,
+          PrefetchHooks Function({bool ventaId, bool tablaLineasPedidoRefs})
+        > {
+  $$TablaPedidosTableTableManager(_$BaseDeDatos db, $TablaPedidosTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$TablaPedidosTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$TablaPedidosTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$TablaPedidosTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<DateTime> fecha = const Value.absent(),
+                Value<String?> cliente = const Value.absent(),
+                Value<String?> nota = const Value.absent(),
+                Value<double> envioMonto = const Value.absent(),
+                Value<String> medioPago = const Value.absent(),
+                Value<String> estadoPago = const Value.absent(),
+                Value<String> estado = const Value.absent(),
+                Value<double> subtotal = const Value.absent(),
+                Value<double> total = const Value.absent(),
+                Value<int?> ventaId = const Value.absent(),
+              }) => TablaPedidosCompanion(
+                id: id,
+                fecha: fecha,
+                cliente: cliente,
+                nota: nota,
+                envioMonto: envioMonto,
+                medioPago: medioPago,
+                estadoPago: estadoPago,
+                estado: estado,
+                subtotal: subtotal,
+                total: total,
+                ventaId: ventaId,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<DateTime> fecha = const Value.absent(),
+                Value<String?> cliente = const Value.absent(),
+                Value<String?> nota = const Value.absent(),
+                Value<double> envioMonto = const Value.absent(),
+                Value<String> medioPago = const Value.absent(),
+                Value<String> estadoPago = const Value.absent(),
+                Value<String> estado = const Value.absent(),
+                Value<double> subtotal = const Value.absent(),
+                Value<double> total = const Value.absent(),
+                Value<int?> ventaId = const Value.absent(),
+              }) => TablaPedidosCompanion.insert(
+                id: id,
+                fecha: fecha,
+                cliente: cliente,
+                nota: nota,
+                envioMonto: envioMonto,
+                medioPago: medioPago,
+                estadoPago: estadoPago,
+                estado: estado,
+                subtotal: subtotal,
+                total: total,
+                ventaId: ventaId,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$TablaPedidosTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback:
+              ({ventaId = false, tablaLineasPedidoRefs = false}) {
+                return PrefetchHooks(
+                  db: db,
+                  explicitlyWatchedTables: [
+                    if (tablaLineasPedidoRefs) db.tablaLineasPedido,
+                  ],
+                  addJoins:
+                      <
+                        T extends TableManagerState<
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic
+                        >
+                      >(state) {
+                        if (ventaId) {
+                          state =
+                              state.withJoin(
+                                    currentTable: table,
+                                    currentColumn: table.ventaId,
+                                    referencedTable:
+                                        $$TablaPedidosTableReferences
+                                            ._ventaIdTable(db),
+                                    referencedColumn:
+                                        $$TablaPedidosTableReferences
+                                            ._ventaIdTable(db)
+                                            .id,
+                                  )
+                                  as T;
+                        }
+
+                        return state;
+                      },
+                  getPrefetchedDataCallback: (items) async {
+                    return [
+                      if (tablaLineasPedidoRefs)
+                        await $_getPrefetchedData<
+                          TablaPedido,
+                          $TablaPedidosTable,
+                          TablaLineasPedidoData
+                        >(
+                          currentTable: table,
+                          referencedTable: $$TablaPedidosTableReferences
+                              ._tablaLineasPedidoRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$TablaPedidosTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).tablaLineasPedidoRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.pedidoId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                    ];
+                  },
+                );
+              },
+        ),
+      );
+}
+
+typedef $$TablaPedidosTableProcessedTableManager =
+    ProcessedTableManager<
+      _$BaseDeDatos,
+      $TablaPedidosTable,
+      TablaPedido,
+      $$TablaPedidosTableFilterComposer,
+      $$TablaPedidosTableOrderingComposer,
+      $$TablaPedidosTableAnnotationComposer,
+      $$TablaPedidosTableCreateCompanionBuilder,
+      $$TablaPedidosTableUpdateCompanionBuilder,
+      (TablaPedido, $$TablaPedidosTableReferences),
+      TablaPedido,
+      PrefetchHooks Function({bool ventaId, bool tablaLineasPedidoRefs})
+    >;
+typedef $$TablaLineasPedidoTableCreateCompanionBuilder =
+    TablaLineasPedidoCompanion Function({
+      Value<int> id,
+      required int pedidoId,
+      Value<int?> comboId,
+      Value<int?> productoId,
+      required String nombre,
+      required String unidad,
+      required double cantidad,
+      Value<double> precioUnitario,
+      Value<double> subtotal,
+    });
+typedef $$TablaLineasPedidoTableUpdateCompanionBuilder =
+    TablaLineasPedidoCompanion Function({
+      Value<int> id,
+      Value<int> pedidoId,
+      Value<int?> comboId,
+      Value<int?> productoId,
+      Value<String> nombre,
+      Value<String> unidad,
+      Value<double> cantidad,
+      Value<double> precioUnitario,
+      Value<double> subtotal,
+    });
+
+final class $$TablaLineasPedidoTableReferences
+    extends
+        BaseReferences<
+          _$BaseDeDatos,
+          $TablaLineasPedidoTable,
+          TablaLineasPedidoData
+        > {
+  $$TablaLineasPedidoTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $TablaPedidosTable _pedidoIdTable(_$BaseDeDatos db) =>
+      db.tablaPedidos.createAlias(
+        $_aliasNameGenerator(db.tablaLineasPedido.pedidoId, db.tablaPedidos.id),
+      );
+
+  $$TablaPedidosTableProcessedTableManager get pedidoId {
+    final $_column = $_itemColumn<int>('pedido_id')!;
+
+    final manager = $$TablaPedidosTableTableManager(
+      $_db,
+      $_db.tablaPedidos,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_pedidoIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static $TablaCombosTable _comboIdTable(_$BaseDeDatos db) =>
+      db.tablaCombos.createAlias(
+        $_aliasNameGenerator(db.tablaLineasPedido.comboId, db.tablaCombos.id),
+      );
+
+  $$TablaCombosTableProcessedTableManager? get comboId {
+    final $_column = $_itemColumn<int>('combo_id');
+    if ($_column == null) return null;
+    final manager = $$TablaCombosTableTableManager(
+      $_db,
+      $_db.tablaCombos,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_comboIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static $TablaProductosTable _productoIdTable(_$BaseDeDatos db) =>
+      db.tablaProductos.createAlias(
+        $_aliasNameGenerator(
+          db.tablaLineasPedido.productoId,
+          db.tablaProductos.id,
+        ),
+      );
+
+  $$TablaProductosTableProcessedTableManager? get productoId {
+    final $_column = $_itemColumn<int>('producto_id');
+    if ($_column == null) return null;
+    final manager = $$TablaProductosTableTableManager(
+      $_db,
+      $_db.tablaProductos,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_productoIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$TablaLineasPedidoTableFilterComposer
+    extends Composer<_$BaseDeDatos, $TablaLineasPedidoTable> {
+  $$TablaLineasPedidoTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get nombre => $composableBuilder(
+    column: $table.nombre,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get unidad => $composableBuilder(
+    column: $table.unidad,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get cantidad => $composableBuilder(
+    column: $table.cantidad,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get precioUnitario => $composableBuilder(
+    column: $table.precioUnitario,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get subtotal => $composableBuilder(
+    column: $table.subtotal,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$TablaPedidosTableFilterComposer get pedidoId {
+    final $$TablaPedidosTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.pedidoId,
+      referencedTable: $db.tablaPedidos,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$TablaPedidosTableFilterComposer(
+            $db: $db,
+            $table: $db.tablaPedidos,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$TablaCombosTableFilterComposer get comboId {
+    final $$TablaCombosTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.comboId,
+      referencedTable: $db.tablaCombos,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$TablaCombosTableFilterComposer(
+            $db: $db,
+            $table: $db.tablaCombos,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$TablaProductosTableFilterComposer get productoId {
+    final $$TablaProductosTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.productoId,
+      referencedTable: $db.tablaProductos,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$TablaProductosTableFilterComposer(
+            $db: $db,
+            $table: $db.tablaProductos,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$TablaLineasPedidoTableOrderingComposer
+    extends Composer<_$BaseDeDatos, $TablaLineasPedidoTable> {
+  $$TablaLineasPedidoTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get nombre => $composableBuilder(
+    column: $table.nombre,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get unidad => $composableBuilder(
+    column: $table.unidad,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get cantidad => $composableBuilder(
+    column: $table.cantidad,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get precioUnitario => $composableBuilder(
+    column: $table.precioUnitario,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get subtotal => $composableBuilder(
+    column: $table.subtotal,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$TablaPedidosTableOrderingComposer get pedidoId {
+    final $$TablaPedidosTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.pedidoId,
+      referencedTable: $db.tablaPedidos,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$TablaPedidosTableOrderingComposer(
+            $db: $db,
+            $table: $db.tablaPedidos,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$TablaCombosTableOrderingComposer get comboId {
+    final $$TablaCombosTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.comboId,
+      referencedTable: $db.tablaCombos,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$TablaCombosTableOrderingComposer(
+            $db: $db,
+            $table: $db.tablaCombos,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$TablaProductosTableOrderingComposer get productoId {
+    final $$TablaProductosTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.productoId,
+      referencedTable: $db.tablaProductos,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$TablaProductosTableOrderingComposer(
+            $db: $db,
+            $table: $db.tablaProductos,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$TablaLineasPedidoTableAnnotationComposer
+    extends Composer<_$BaseDeDatos, $TablaLineasPedidoTable> {
+  $$TablaLineasPedidoTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get nombre =>
+      $composableBuilder(column: $table.nombre, builder: (column) => column);
+
+  GeneratedColumn<String> get unidad =>
+      $composableBuilder(column: $table.unidad, builder: (column) => column);
+
+  GeneratedColumn<double> get cantidad =>
+      $composableBuilder(column: $table.cantidad, builder: (column) => column);
+
+  GeneratedColumn<double> get precioUnitario => $composableBuilder(
+    column: $table.precioUnitario,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get subtotal =>
+      $composableBuilder(column: $table.subtotal, builder: (column) => column);
+
+  $$TablaPedidosTableAnnotationComposer get pedidoId {
+    final $$TablaPedidosTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.pedidoId,
+      referencedTable: $db.tablaPedidos,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$TablaPedidosTableAnnotationComposer(
+            $db: $db,
+            $table: $db.tablaPedidos,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$TablaCombosTableAnnotationComposer get comboId {
+    final $$TablaCombosTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.comboId,
+      referencedTable: $db.tablaCombos,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$TablaCombosTableAnnotationComposer(
+            $db: $db,
+            $table: $db.tablaCombos,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$TablaProductosTableAnnotationComposer get productoId {
+    final $$TablaProductosTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.productoId,
+      referencedTable: $db.tablaProductos,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$TablaProductosTableAnnotationComposer(
+            $db: $db,
+            $table: $db.tablaProductos,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$TablaLineasPedidoTableTableManager
+    extends
+        RootTableManager<
+          _$BaseDeDatos,
+          $TablaLineasPedidoTable,
+          TablaLineasPedidoData,
+          $$TablaLineasPedidoTableFilterComposer,
+          $$TablaLineasPedidoTableOrderingComposer,
+          $$TablaLineasPedidoTableAnnotationComposer,
+          $$TablaLineasPedidoTableCreateCompanionBuilder,
+          $$TablaLineasPedidoTableUpdateCompanionBuilder,
+          (TablaLineasPedidoData, $$TablaLineasPedidoTableReferences),
+          TablaLineasPedidoData,
+          PrefetchHooks Function({bool pedidoId, bool comboId, bool productoId})
+        > {
+  $$TablaLineasPedidoTableTableManager(
+    _$BaseDeDatos db,
+    $TablaLineasPedidoTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$TablaLineasPedidoTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$TablaLineasPedidoTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$TablaLineasPedidoTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<int> pedidoId = const Value.absent(),
+                Value<int?> comboId = const Value.absent(),
+                Value<int?> productoId = const Value.absent(),
+                Value<String> nombre = const Value.absent(),
+                Value<String> unidad = const Value.absent(),
+                Value<double> cantidad = const Value.absent(),
+                Value<double> precioUnitario = const Value.absent(),
+                Value<double> subtotal = const Value.absent(),
+              }) => TablaLineasPedidoCompanion(
+                id: id,
+                pedidoId: pedidoId,
+                comboId: comboId,
+                productoId: productoId,
+                nombre: nombre,
+                unidad: unidad,
+                cantidad: cantidad,
+                precioUnitario: precioUnitario,
+                subtotal: subtotal,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required int pedidoId,
+                Value<int?> comboId = const Value.absent(),
+                Value<int?> productoId = const Value.absent(),
+                required String nombre,
+                required String unidad,
+                required double cantidad,
+                Value<double> precioUnitario = const Value.absent(),
+                Value<double> subtotal = const Value.absent(),
+              }) => TablaLineasPedidoCompanion.insert(
+                id: id,
+                pedidoId: pedidoId,
+                comboId: comboId,
+                productoId: productoId,
+                nombre: nombre,
+                unidad: unidad,
+                cantidad: cantidad,
+                precioUnitario: precioUnitario,
+                subtotal: subtotal,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$TablaLineasPedidoTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback:
+              ({pedidoId = false, comboId = false, productoId = false}) {
+                return PrefetchHooks(
+                  db: db,
+                  explicitlyWatchedTables: [],
+                  addJoins:
+                      <
+                        T extends TableManagerState<
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic
+                        >
+                      >(state) {
+                        if (pedidoId) {
+                          state =
+                              state.withJoin(
+                                    currentTable: table,
+                                    currentColumn: table.pedidoId,
+                                    referencedTable:
+                                        $$TablaLineasPedidoTableReferences
+                                            ._pedidoIdTable(db),
+                                    referencedColumn:
+                                        $$TablaLineasPedidoTableReferences
+                                            ._pedidoIdTable(db)
+                                            .id,
+                                  )
+                                  as T;
+                        }
+                        if (comboId) {
+                          state =
+                              state.withJoin(
+                                    currentTable: table,
+                                    currentColumn: table.comboId,
+                                    referencedTable:
+                                        $$TablaLineasPedidoTableReferences
+                                            ._comboIdTable(db),
+                                    referencedColumn:
+                                        $$TablaLineasPedidoTableReferences
+                                            ._comboIdTable(db)
+                                            .id,
+                                  )
+                                  as T;
+                        }
+                        if (productoId) {
+                          state =
+                              state.withJoin(
+                                    currentTable: table,
+                                    currentColumn: table.productoId,
+                                    referencedTable:
+                                        $$TablaLineasPedidoTableReferences
+                                            ._productoIdTable(db),
+                                    referencedColumn:
+                                        $$TablaLineasPedidoTableReferences
+                                            ._productoIdTable(db)
+                                            .id,
+                                  )
+                                  as T;
+                        }
+
+                        return state;
+                      },
+                  getPrefetchedDataCallback: (items) async {
+                    return [];
+                  },
+                );
+              },
+        ),
+      );
+}
+
+typedef $$TablaLineasPedidoTableProcessedTableManager =
+    ProcessedTableManager<
+      _$BaseDeDatos,
+      $TablaLineasPedidoTable,
+      TablaLineasPedidoData,
+      $$TablaLineasPedidoTableFilterComposer,
+      $$TablaLineasPedidoTableOrderingComposer,
+      $$TablaLineasPedidoTableAnnotationComposer,
+      $$TablaLineasPedidoTableCreateCompanionBuilder,
+      $$TablaLineasPedidoTableUpdateCompanionBuilder,
+      (TablaLineasPedidoData, $$TablaLineasPedidoTableReferences),
+      TablaLineasPedidoData,
+      PrefetchHooks Function({bool pedidoId, bool comboId, bool productoId})
+    >;
 
 class $BaseDeDatosManager {
   final _$BaseDeDatos _db;
@@ -6536,4 +8828,8 @@ class $BaseDeDatosManager {
       $$TablaComprasTableTableManager(_db, _db.tablaCompras);
   $$TablaLineasCompraTableTableManager get tablaLineasCompra =>
       $$TablaLineasCompraTableTableManager(_db, _db.tablaLineasCompra);
+  $$TablaPedidosTableTableManager get tablaPedidos =>
+      $$TablaPedidosTableTableManager(_db, _db.tablaPedidos);
+  $$TablaLineasPedidoTableTableManager get tablaLineasPedido =>
+      $$TablaLineasPedidoTableTableManager(_db, _db.tablaLineasPedido);
 }

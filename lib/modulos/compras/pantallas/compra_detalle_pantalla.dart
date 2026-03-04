@@ -330,7 +330,7 @@ class _CompraDetallePantallaState extends State<CompraDetallePantalla> {
           ),
 
           const SizedBox(height: 18),
-          _tituloSeccion('Líneas'),
+          _tituloSeccion('Descripción de la compra '),
           const SizedBox(height: 8),
 
           if (lineas.isEmpty)

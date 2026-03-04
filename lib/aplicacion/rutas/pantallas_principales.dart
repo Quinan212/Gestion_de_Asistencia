@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import 'package:gestion_de_stock/modulos/inventario/pantallas/inventario_pantalla.dart' as inv;
 import 'package:gestion_de_stock/modulos/combos/pantallas/combos_pantalla.dart' as cmb;
+import 'package:gestion_de_stock/modulos/pedidos/pantallas/pedidos_pantalla.dart' as ped;
 import 'package:gestion_de_stock/modulos/ventas/pantallas/ventas_pantalla.dart' as ven;
 import 'package:gestion_de_stock/modulos/compras/pantallas/compras_pantalla.dart' as com;
 import 'package:gestion_de_stock/modulos/reportes/pantallas/reportes_pantalla.dart' as rep;
@@ -17,17 +18,19 @@ class PantallasPrincipales extends StatefulWidget {
 class _PantallasPrincipalesState extends State<PantallasPrincipales> {
   int _indice = 0;
 
-  late final List<Widget> _pantallas = const [
-    inv.InventarioPantalla(),
-    cmb.CombosPantalla(),
-    ven.VentasPantalla(),
-    com.ComprasPantalla(),
-    rep.ReportesPantalla(),
+  late final List<Widget> _pantallas = [
+    const inv.InventarioPantalla(),
+    const cmb.CombosPantalla(),
+    const ped.PedidosPantalla(),
+    const ven.VentasPantalla(),
+    const com.ComprasPantalla(),
+    const rep.ReportesPantalla(),
   ];
 
   final List<String> _titulos = const [
     'Inventario',
     'Combos',
+    'Pedidos',
     'Ventas',
     'Compras',
     'Reportes',
@@ -60,6 +63,11 @@ class _PantallasPrincipalesState extends State<PantallasPrincipales> {
                   icon: Icon(Icons.view_list_outlined),
                   selectedIcon: Icon(Icons.view_list),
                   label: 'Combos',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.receipt_long_outlined),
+                  selectedIcon: Icon(Icons.receipt_long),
+                  label: 'Pedidos',
                 ),
                 NavigationDestination(
                   icon: Icon(Icons.point_of_sale_outlined),
@@ -99,6 +107,11 @@ class _PantallasPrincipalesState extends State<PantallasPrincipales> {
                     icon: Icon(Icons.view_list_outlined),
                     selectedIcon: Icon(Icons.view_list),
                     label: Text('Combos'),
+                  ),
+                  NavigationRailDestination(
+                    icon: Icon(Icons.receipt_long_outlined),
+                    selectedIcon: Icon(Icons.receipt_long),
+                    label: Text('Pedidos'),
                   ),
                   NavigationRailDestination(
                     icon: Icon(Icons.point_of_sale_outlined),

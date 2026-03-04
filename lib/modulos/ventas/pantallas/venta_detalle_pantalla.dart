@@ -60,6 +60,14 @@ class _VentaDetallePantallaState extends State<VentaDetallePantalla> {
   Future<List<Producto>> _productos() =>
       Proveedores.inventarioRepositorio.listarProductos(incluirInactivos: true);
 
+  Future<bool> _ventaCancelada(Venta v) async {
+    final nota = (v.nota ?? '').toUpperCase();
+    if (nota.contains('VENTA CANCELADA')) return true;
+
+    // si el pedido está cancelado y apunta a esta venta => mostrar cancelada igual
+    return Proveedores.pedidosRepositorio.ventaEstaCancelada(v.id);
+  }
+
   // -------- fecha estilo ML --------
 
   String _mesCortoEs(int m) {
@@ -99,23 +107,18 @@ class _VentaDetallePantallaState extends State<VentaDetallePantalla> {
     var s = t.trim();
     if (s.isEmpty) return 0.0;
 
-    // saca moneda y texto, deja números y separadores
     s = s.replaceAll(_moneda, '').replaceAll(' ', '');
     s = s.replaceAll(RegExp(r'[^0-9\.,\-]'), '');
-
     if (s.isEmpty) return 0.0;
 
     final hasDot = s.contains('.');
     final hasComma = s.contains(',');
 
     if (hasDot && hasComma) {
-      // caso típico: 1.234,56  -> miles '.' y decimal ','
       s = s.replaceAll('.', '').replaceAll(',', '.');
     } else if (hasComma && !hasDot) {
-      // decimal con coma: 250,50 -> 250.50
       s = s.replaceAll(',', '.');
     }
-    // si solo hay '.', lo dejamos como decimal normal
 
     return double.tryParse(s) ?? 0.0;
   }
@@ -166,21 +169,9 @@ class _VentaDetallePantallaState extends State<VentaDetallePantalla> {
 
   // -------- UI: avatar grande + “burbujas” de fotos --------
 
-  Widget _avatarGrandeVenta() {
-    return CircleAvatar(
-      radius: 22,
-      backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-      child: Icon(
-        Icons.shopping_bag_outlined,
-        color: Theme.of(context).colorScheme.onSurfaceVariant,
-      ),
-    );
-  }
-
-  // CAMBIO 1: burbuja +35% (36px -> ~49px)
   Widget _avatarFotoProducto(Producto? p) {
     const double lado = 49.0;
-    const double radius = lado / 2; // 24.5
+    const double radius = lado / 2;
 
     final ruta = (p?.imagen ?? '').trim();
     final ok = ruta.isNotEmpty && File(ruta).existsSync();
@@ -205,7 +196,6 @@ class _VentaDetallePantallaState extends State<VentaDetallePantalla> {
     );
   }
 
-  // CAMBIO 1: tilde +35% para que calce igual
   Widget _avatarComboTilde() {
     const double lado = 49.0;
     const double radius = lado / 2;
@@ -255,7 +245,6 @@ class _VentaDetallePantallaState extends State<VentaDetallePantalla> {
     );
   }
 
-  // CAMBIO 2: miniatura al lado del nombre en “Descripción”
   Widget _thumbProducto(Producto? p) {
     final ruta = (p?.imagen ?? '').trim();
     final ok = ruta.isNotEmpty && File(ruta).existsSync();
@@ -299,10 +288,36 @@ class _VentaDetallePantallaState extends State<VentaDetallePantalla> {
     );
   }
 
-  // -------- MOBILE: layout (igual al tuyo) --------
+  Widget _bannerCancelada() {
+    final cs = Theme.of(context).colorScheme;
+    return Card(
+      color: cs.errorContainer,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          children: [
+            Icon(Icons.block, color: cs.onErrorContainer),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'VENTA CANCELADA',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color: cs.onErrorContainer,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // -------- MOBILE: layout --------
 
   Widget _mobileBody({
     required Venta venta,
+    required bool cancelada,
     required List<LineaVenta> lineas,
     required List<Combo> combos,
     required List<Producto> productos,
@@ -326,14 +341,7 @@ class _VentaDetallePantallaState extends State<VentaDetallePantalla> {
     final envioMonto = _parseMonto(envioTxt);
     final tieneEnvio = envioTxt.isNotEmpty && envioMonto.abs() > 0.0000001;
 
-// total grande = SOLO productos (total - envío)
-    final totalProductos = (venta.total - envioMonto);
-    final totalProductosOk = totalProductos.isFinite
-        ? (totalProductos < 0 ? 0.0 : totalProductos)
-        : venta.total;
-
-    final totalTxt = Formatos.dinero(_moneda, totalProductosOk);
-
+    final totalTxt = Formatos.dinero(_moneda, venta.total);
     final fechaTxt = _fechaML(venta.fecha);
 
     final pago = _pagoDesdeNota(venta.nota);
@@ -346,16 +354,18 @@ class _VentaDetallePantallaState extends State<VentaDetallePantalla> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              _stackAvatares(avs),
-            ],
-          ),
+          if (cancelada) ...[
+            _bannerCancelada(),
+            const SizedBox(height: 12),
+          ],
+          Row(children: [_stackAvatares(avs)]),
           const SizedBox(height: 12),
           Text(
             totalTxt,
             style: Theme.of(context).textTheme.headlineMedium?.copyWith(
               fontWeight: FontWeight.w800,
+              decoration: cancelada ? TextDecoration.lineThrough : null,
+              color: cancelada ? Theme.of(context).colorScheme.onSurfaceVariant : null,
             ),
           ),
           if (tieneEnvio) ...[
@@ -425,7 +435,6 @@ class _VentaDetallePantallaState extends State<VentaDetallePantalla> {
                     for (int i = 0; i < filasDesc.length; i++) ...[
                       Row(
                         children: [
-                          // CAMBIO 2: miniatura al lado del nombre
                           _thumbProducto(prodPorId[filasDesc[i].productoId]),
                           const SizedBox(width: 10),
                           Expanded(
@@ -457,10 +466,11 @@ class _VentaDetallePantallaState extends State<VentaDetallePantalla> {
     );
   }
 
-  // -------- TABLET: tu versión “vieja” (sin tocar) --------
+  // -------- TABLET --------
 
   Widget _tabletBodyViejo({
     required Venta venta,
+    required bool cancelada,
     required List<LineaVenta> lineas,
     required List<Combo> combos,
     required List<Producto> productos,
@@ -470,89 +480,104 @@ class _VentaDetallePantallaState extends State<VentaDetallePantalla> {
 
     final envioTxt = _envioDesdeNota(venta.nota);
     final envioMonto = _parseMonto(envioTxt);
-
-    final totalProductos = (venta.total - envioMonto);
-    final totalProductosOk = totalProductos.isFinite
-        ? (totalProductos < 0 ? 0.0 : totalProductos)
-        : venta.total;
+    final tieneEnvio = envioTxt.isNotEmpty && envioMonto.abs() > 0.0000001;
 
     return Padding(
       padding: const EdgeInsets.all(12),
-      child: Row(
+      child: Column(
         children: [
+          if (cancelada) ...[
+            _bannerCancelada(),
+            const SizedBox(height: 12),
+          ],
           Expanded(
-            flex: 5,
-            child: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Fecha: ${_fechaML(venta.fecha)}'),
-                  const SizedBox(height: 8),
-
-                  Text('Total: ${Formatos.dinero(_moneda, totalProductosOk)}'),
-                  const SizedBox(height: 12),
-                  if (partes.resumen.isNotEmpty) ...[
-                    Text('Resumen estimado', style: Theme.of(context).textTheme.titleMedium),
-                    const SizedBox(height: 6),
-                    Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: Text(_resumenConMoneda(partes.resumen)),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                  ],
-                  Text('Nota', style: Theme.of(context).textTheme.titleMedium),
-                  const SizedBox(height: 6),
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Text(partes.nota.isEmpty ? '-' : partes.nota),
+            child: Row(
+              children: [
+                Expanded(
+                  flex: 5,
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Fecha: ${_fechaML(venta.fecha)}'),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Total: ${Formatos.dinero(_moneda, venta.total)}',
+                          style: TextStyle(
+                            decoration: cancelada ? TextDecoration.lineThrough : null,
+                            color: cancelada ? Theme.of(context).colorScheme.onSurfaceVariant : null,
+                          ),
+                        ),
+                        if (tieneEnvio) ...[
+                          const SizedBox(height: 6),
+                          Text('Envío: ${Formatos.dinero(_moneda, envioMonto)}'),
+                        ],
+                        const SizedBox(height: 12),
+                        if (partes.resumen.isNotEmpty) ...[
+                          Text('Resumen estimado', style: Theme.of(context).textTheme.titleMedium),
+                          const SizedBox(height: 6),
+                          Card(
+                            child: Padding(
+                              padding: const EdgeInsets.all(12),
+                              child: Text(_resumenConMoneda(partes.resumen)),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                        ],
+                        Text('Nota', style: Theme.of(context).textTheme.titleMedium),
+                        const SizedBox(height: 6),
+                        Card(
+                          child: Padding(
+                            padding: const EdgeInsets.all(12),
+                            child: Text(partes.nota.isEmpty ? '-' : partes.nota),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            flex: 6,
-            child: Card(
-              clipBehavior: Clip.antiAlias,
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: lineas.isEmpty
-                    ? const Center(child: Text('Sin líneas'))
-                    : ListView.separated(
-                  itemCount: lineas.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 8),
-                  itemBuilder: (context, i) {
-                    final l = lineas[i];
-                    final combo = combos.firstWhere(
-                          (c) => c.id == l.comboId,
-                      orElse: () => Combo(
-                        id: l.comboId,
-                        nombre: 'Combo ${l.comboId}',
-                        precioVenta: 0,
-                        activo: true,
-                        creadoEn: DateTime.now(),
-                      ),
-                    );
-
-                    return ListTile(
-                      title: Text(combo.nombre, maxLines: 1, overflow: TextOverflow.ellipsis),
-                      subtitle: Text(
-                        'Cantidad: ${l.cantidad.toStringAsFixed(2)}\n'
-                            'Precio: ${Formatos.dinero(_moneda, l.precioUnitario)}',
-                      ),
-                      trailing: Text(
-                        Formatos.dinero(_moneda, l.subtotal),
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                    );
-                  },
                 ),
-              ),
+                const SizedBox(width: 12),
+                Expanded(
+                  flex: 6,
+                  child: Card(
+                    clipBehavior: Clip.antiAlias,
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: lineas.isEmpty
+                          ? const Center(child: Text('Sin líneas'))
+                          : ListView.separated(
+                        itemCount: lineas.length,
+                        separatorBuilder: (_, __) => const SizedBox(height: 8),
+                        itemBuilder: (context, i) {
+                          final l = lineas[i];
+                          final combo = combos.firstWhere(
+                                (c) => c.id == l.comboId,
+                            orElse: () => Combo(
+                              id: l.comboId,
+                              nombre: 'Combo ${l.comboId}',
+                              precioVenta: 0,
+                              activo: true,
+                              creadoEn: DateTime.now(),
+                            ),
+                          );
+
+                          return ListTile(
+                            title: Text(combo.nombre, maxLines: 1, overflow: TextOverflow.ellipsis),
+                            subtitle: Text(
+                              'Cantidad: ${l.cantidad.toStringAsFixed(2)}\n'
+                                  'Precio: ${Formatos.dinero(_moneda, l.precioUnitario)}',
+                            ),
+                            trailing: Text(
+                              Formatos.dinero(_moneda, l.subtotal),
+                              style: Theme.of(context).textTheme.titleMedium,
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -560,7 +585,7 @@ class _VentaDetallePantallaState extends State<VentaDetallePantalla> {
     );
   }
 
-  // -------- util resumen (una sola vez) --------
+  // -------- util resumen --------
 
   ({String resumen, String nota}) _separarNota(String? nota) {
     final t = (nota ?? '').trim();
@@ -625,57 +650,66 @@ class _VentaDetallePantallaState extends State<VentaDetallePantalla> {
         final venta = snapV.data;
         if (venta == null) return const Center(child: Text('Venta no encontrada'));
 
-        return FutureBuilder<List<LineaVenta>>(
-          future: _lineas(),
-          builder: (context, snapL) {
-            if (snapL.connectionState != ConnectionState.done) {
-              return const Center(child: CircularProgressIndicator());
-            }
-            final lineas = snapL.data ?? [];
+        return FutureBuilder<bool>(
+          future: _ventaCancelada(venta),
+          builder: (context, snapCancel) {
+            final cancelada = snapCancel.data ?? false;
 
-            return FutureBuilder<List<Combo>>(
-              future: _combos(),
-              builder: (context, snapC) {
-                if (snapC.connectionState != ConnectionState.done) {
+            return FutureBuilder<List<LineaVenta>>(
+              future: _lineas(),
+              builder: (context, snapL) {
+                if (snapL.connectionState != ConnectionState.done) {
                   return const Center(child: CircularProgressIndicator());
                 }
-                final combos = snapC.data ?? [];
+                final lineas = snapL.data ?? [];
 
-                return FutureBuilder<List<Producto>>(
-                  future: _productos(),
-                  builder: (context, snapP) {
-                    if (snapP.connectionState != ConnectionState.done) {
+                return FutureBuilder<List<Combo>>(
+                  future: _combos(),
+                  builder: (context, snapC) {
+                    if (snapC.connectionState != ConnectionState.done) {
                       return const Center(child: CircularProgressIndicator());
                     }
-                    final productos = snapP.data ?? [];
+                    final combos = snapC.data ?? [];
 
-                    return FutureBuilder<Map<int, _ProductoVendido>>(
-                      future: _calcularProductosVendidos(
-                        lineas: lineas,
-                        combos: combos,
-                        productos: productos,
-                      ),
-                      builder: (context, snapVendidos) {
-                        final vendidos = snapVendidos.data ?? {};
+                    return FutureBuilder<List<Producto>>(
+                      future: _productos(),
+                      builder: (context, snapP) {
+                        if (snapP.connectionState != ConnectionState.done) {
+                          return const Center(child: CircularProgressIndicator());
+                        }
+                        final productos = snapP.data ?? [];
 
-                        return LayoutBuilder(
-                          builder: (context, c) {
-                            final esTablet = c.maxWidth >= _kTablet;
+                        return FutureBuilder<Map<int, _ProductoVendido>>(
+                          future: _calcularProductosVendidos(
+                            lineas: lineas,
+                            combos: combos,
+                            productos: productos,
+                          ),
+                          builder: (context, snapVendidos) {
+                            final vendidos = snapVendidos.data ?? {};
 
-                            return esTablet
-                                ? _tabletBodyViejo(
-                              venta: venta,
-                              lineas: lineas,
-                              combos: combos,
-                              productos: productos,
-                              vendidos: vendidos,
-                            )
-                                : _mobileBody(
-                              venta: venta,
-                              lineas: lineas,
-                              combos: combos,
-                              productos: productos,
-                              vendidos: vendidos,
+                            return LayoutBuilder(
+                              builder: (context, c) {
+                                final esTablet = c.maxWidth >= _kTablet;
+
+                                return esTablet
+                                    ? _tabletBodyViejo(
+                                  venta: venta,
+                                  cancelada: cancelada,
+                                  lineas: lineas,
+                                  combos: combos,
+                                  productos: productos,
+                                  vendidos: vendidos,
+                                )
+                                    : _mobileBody(
+                                  venta: venta,
+                                  cancelada: cancelada,
+                                  lineas: lineas,
+                                  combos: combos,
+                                  productos: productos,
+                                  vendidos: vendidos,
+                                );
+                              },
                             );
                           },
                         );

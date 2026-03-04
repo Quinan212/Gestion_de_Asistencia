@@ -1,20 +1,23 @@
-// lib/infraestructura/base_de_datos/tablas/tabla_lineas_venta.dart
 import 'package:drift/drift.dart';
-import 'tabla_ventas.dart';
-import 'tabla_combos.dart';
 
 class TablaLineasVenta extends Table {
   IntColumn get id => integer().autoIncrement()();
 
-  IntColumn get ventaId =>
-      integer().references(TablaVentas, #id, onDelete: KeyAction.cascade)();
+  IntColumn get ventaId => integer()();
 
-  IntColumn get comboId =>
-      integer().references(TablaCombos, #id, onDelete: KeyAction.restrict)();
+  // EXISTENTE: lo dejamos como int requerido para no romper la tabla actual.
+  // Para líneas de PRODUCTO vamos a guardar comboId = 0.
+  IntColumn get comboId => integer()();
+
+  // NUEVO: si no es null, esta línea representa un PRODUCTO suelto.
+  IntColumn get productoId => integer().nullable()();
 
   RealColumn get cantidad => real()();
 
-  RealColumn get precioUnitario => real().withDefault(const Constant(0))();
+  RealColumn get precioUnitario => real()();
 
-  RealColumn get subtotal => real().withDefault(const Constant(0))();
+  RealColumn get subtotal => real()();
+
+  @override
+  Set<Column> get primaryKey => {id};
 }

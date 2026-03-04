@@ -14,6 +14,9 @@ import 'tablas/tabla_lineas_venta.dart';
 import 'tablas/tabla_compras.dart';
 import 'tablas/tabla_lineas_compra.dart';
 
+import 'tablas/tabla_pedidos.dart';
+import 'tablas/tabla_lineas_pedido.dart';
+
 part 'base_de_datos.g.dart';
 
 @DriftDatabase(
@@ -26,13 +29,15 @@ part 'base_de_datos.g.dart';
     TablaLineasVenta,
     TablaCompras,
     TablaLineasCompra,
+    TablaPedidos,
+    TablaLineasPedido,
   ],
 )
 class BaseDeDatos extends _$BaseDeDatos {
   BaseDeDatos() : super(_abrirConexion());
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -43,7 +48,17 @@ class BaseDeDatos extends _$BaseDeDatos {
       if (from < 2) {
         await m.addColumn(tablaProductos, tablaProductos.imagen);
       }
-    },
+      if (from < 3) {
+        await m.createTable(tablaPedidos);
+        await m.createTable(tablaLineasPedido);
+      }
+      if (from < 4) {
+        await m.addColumn(
+          tablaLineasVenta,
+          tablaLineasVenta.productoId as GeneratedColumn<Object>,
+        );
+      }
+    }
   );
 
   Future<void> cerrar() async => close();

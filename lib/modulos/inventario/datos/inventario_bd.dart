@@ -109,7 +109,8 @@ class InventarioBd {
   }
 
   Future<double> calcularStockActual(int productoId) async {
-    final filas = await (_bd.select(_bd.tablaMovimientos)..where((t) => t.productoId.equals(productoId)))
+    final filas =
+    await (_bd.select(_bd.tablaMovimientos)..where((t) => t.productoId.equals(productoId)))
         .get();
 
     double total = 0;
@@ -122,10 +123,53 @@ class InventarioBd {
       } else if (tipo == 'egreso') {
         total -= cant;
       } else if (tipo == 'ajuste') {
-        total += cant;
+        total += cant; // ajuste ya puede venir con signo
       }
     }
     return total;
+  }
+
+  // ---------------- NUEVO: batch ----------------
+  Future<Map<int, double>> calcularStockActualPorProductos(List<int> productoIds) async {
+    final ids = productoIds.where((e) => e > 0).toSet().toList();
+    if (ids.isEmpty) return {};
+
+    final mov = _bd.tablaMovimientos;
+
+    // ingresos = tipo != 'egreso'  (ingreso, devolucion, ajuste)
+    final qIng = _bd.selectOnly(mov)
+      ..addColumns([mov.productoId, mov.cantidad.sum()])
+      ..where(mov.productoId.isIn(ids) & mov.tipo.isNotValue('egreso'))
+      ..groupBy([mov.productoId]);
+
+    // egresos = tipo == 'egreso'
+    final qEgr = _bd.selectOnly(mov)
+      ..addColumns([mov.productoId, mov.cantidad.sum()])
+      ..where(mov.productoId.isIn(ids) & mov.tipo.equals('egreso'))
+      ..groupBy([mov.productoId]);
+
+    final ingRows = await qIng.get();
+    final egrRows = await qEgr.get();
+
+    final Map<int, double> ing = {};
+    for (final r in ingRows) {
+      final id = r.read(mov.productoId)!;
+      final sum = r.read(mov.cantidad.sum()) ?? 0.0;
+      ing[id] = sum;
+    }
+
+    final Map<int, double> egr = {};
+    for (final r in egrRows) {
+      final id = r.read(mov.productoId)!;
+      final sum = r.read(mov.cantidad.sum()) ?? 0.0;
+      egr[id] = sum;
+    }
+
+    final Map<int, double> out = {};
+    for (final id in ids) {
+      out[id] = (ing[id] ?? 0.0) - (egr[id] ?? 0.0);
+    }
+    return out;
   }
 
   Future<void> actualizarNotaMovimiento({

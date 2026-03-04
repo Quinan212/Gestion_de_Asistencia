@@ -349,17 +349,12 @@ class _ListaProductosSliver extends StatelessWidget {
       delegate: SliverChildBuilderDelegate(
             (context, index) {
           final p = productos[index];
+          final stock = controlador.stockDe(p.id);
 
-          return FutureBuilder<double>(
-            future: Proveedores.inventarioRepositorio.calcularStockActual(p.id),
-            builder: (context, snap) {
-              final stock = snap.data ?? 0;
-              return ProductoTarjeta(
-                producto: p,
-                stock: stock,
-                alTocar: () => alTocar(p.id),
-              );
-            },
+          return ProductoTarjeta(
+            producto: p,
+            stock: stock,
+            alTocar: () => alTocar(p.id),
           );
         },
         childCount: productos.length,
@@ -411,17 +406,12 @@ class _GridProductosSliver extends StatelessWidget {
             delegate: SliverChildBuilderDelegate(
                   (context, i) {
                 final p = productos[i];
+                final stock = controlador.stockDe(p.id);
 
-                return FutureBuilder<double>(
-                  future: Proveedores.inventarioRepositorio.calcularStockActual(p.id),
-                  builder: (context, snap) {
-                    final stock = snap.data ?? 0;
-                    return _ProductoCuadro(
-                      producto: p,
-                      stock: stock,
-                      alTocar: () => alTocar(p.id),
-                    );
-                  },
+                return _ProductoCuadro(
+                  producto: p,
+                  stock: stock,
+                  alTocar: () => alTocar(p.id),
                 );
               },
               childCount: productos.length,
@@ -859,7 +849,7 @@ class _ProductoNuevoSheetState extends State<_ProductoNuevoSheet> {
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
-                    value: _unidadSeleccion,
+                    initialValue: _unidadSeleccion,
                     items: _unidadesOpciones
                         .map((u) => DropdownMenuItem<String>(
                       value: u,

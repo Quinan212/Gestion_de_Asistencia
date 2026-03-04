@@ -83,8 +83,14 @@ class InventarioRepositorio {
     return _bd.listarMovimientosDeProducto(productoId);
   }
 
+  /// stock de 1 producto (queda, pero por UI conviene usar batch)
   Future<double> calcularStockActual(int productoId) {
     return _bd.calcularStockActual(productoId);
+  }
+
+  /// NUEVO: stock batch para N productos
+  Future<Map<int, double>> calcularStockActualPorProductos(List<int> productoIds) {
+    return _bd.calcularStockActualPorProductos(productoIds);
   }
 
   Future<void> actualizarNotaMovimiento({required int movimientoId, required String? nota}) {
