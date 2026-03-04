@@ -28,11 +28,9 @@ String _unidadConCantidad(String unidad, double cantidad, {bool capitalizar = tr
   final low = u0.toLowerCase();
   final esUno = (cantidad - 1).abs() < 0.0000001;
 
-  // si ya parece plural, no tocamos (solo capitalizamos si corresponde)
   final yaPlural = low.endsWith('s') || low.endsWith('es');
   if (esUno || yaPlural) return capitalizar ? _capPrimera(u0) : u0;
 
-  // casos comunes
   String plural;
   if (low == 'unidad') {
     plural = 'unidades';
@@ -41,13 +39,46 @@ String _unidadConCantidad(String unidad, double cantidad, {bool capitalizar = tr
   } else if (low == 'caja') {
     plural = 'cajas';
   } else {
-    // regla simple: vocal -> +s, consonante -> +es
     final ultima = low.substring(low.length - 1);
     const vocales = {'a', 'e', 'i', 'o', 'u'};
     plural = vocales.contains(ultima) ? '${u0}s' : '${u0}es';
   }
 
   return capitalizar ? _capPrimera(plural) : plural;
+}
+
+Widget _badgeEstado(BuildContext context, {required bool enFalta, required bool activo}) {
+  final cs = Theme.of(context).colorScheme;
+
+  final Color color;
+  final String texto;
+
+  if (!activo) {
+    color = cs.onSurfaceVariant;
+    texto = 'Inactivo';
+  } else if (enFalta) {
+    color = cs.error;
+    texto = 'Bajo mínimo';
+  } else {
+    color = cs.primary;
+    texto = 'OK';
+  }
+
+  return Container(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+    decoration: BoxDecoration(
+      borderRadius: BorderRadius.circular(999),
+      color: color.withValues(alpha: 0.10),
+      border: Border.all(color: color.withValues(alpha: 0.22)),
+    ),
+    child: Text(
+      texto,
+      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+        color: color,
+        fontWeight: FontWeight.w700,
+      ),
+    ),
+  );
 }
 
 class InventarioPantalla extends StatefulWidget {
@@ -92,9 +123,32 @@ class _InventarioPantallaState extends State<InventarioPantalla> {
   }
 
   Future<void> _nuevoProductoCompleto() async {
-    final id = await Navigator.push<int?>(
-      context,
-      MaterialPageRoute(builder: (_) => const _ProductoNuevoPantalla()),
+    final id = await showModalBottomSheet<int?>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      builder: (ctx) {
+        final h = MediaQuery.of(ctx).size.height;
+        final maxH = (h * 0.82).clamp(360.0, 820.0);
+
+        return Align(
+          alignment: Alignment.bottomCenter,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: 640, maxHeight: maxH),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(18),
+                child: Material(
+                  color: Theme.of(ctx).colorScheme.surface,
+                  child: const _ProductoNuevoSheet(),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
     );
 
     if (!mounted) return;
@@ -108,9 +162,7 @@ class _InventarioPantallaState extends State<InventarioPantalla> {
       } else {
         Navigator.push(
           context,
-          MaterialPageRoute(
-            builder: (_) => ProductoDetallePantalla(productoId: id),
-          ),
+          MaterialPageRoute(builder: (_) => ProductoDetallePantalla(productoId: id)),
         );
       }
     }
@@ -129,50 +181,71 @@ class _InventarioPantallaState extends State<InventarioPantalla> {
   }
 
   Widget _cabecera(estado) {
-    return Column(
-      children: [
-        FiltroInventario(
-          valor: estado.filtro,
-          alCambiar: _controlador.cambiarFiltro,
-        ),
-        const SizedBox(height: 8),
-        SwitchListTile(
-          contentPadding: EdgeInsets.zero,
-          title: const Text('Mostrar inactivos'),
-          value: estado.mostrarInactivos,
-          onChanged: _controlador.cambiarMostrarInactivos,
-        ),
-        const SizedBox(height: 8),
-        SegmentedButton<int>(
-          segments: const [
-            ButtonSegment(value: 0, label: Text('Lista')),
-            ButtonSegment(value: 1, label: Text('Cuadrícula')),
+    final cs = Theme.of(context).colorScheme;
+
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            cs.primary.withValues(alpha: 0.08),
+            Colors.transparent,
           ],
-          selected: {_vista},
-          onSelectionChanged: (s) async {
-            final v = s.first;
-            setState(() => _vista = v);
-            await _guardarVista(v);
-          },
         ),
-        const SizedBox(height: 8),
-        SizedBox(
-          width: double.infinity,
-          child: FilledButton.icon(
-            onPressed: _nuevoProductoCompleto,
-            icon: const Icon(Icons.add),
-            label: const Text('Nuevo producto'),
+      ),
+      child: Card(
+        color: cs.surfaceContainerLow,
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            children: [
+              FiltroInventario(
+                valor: estado.filtro,
+                alCambiar: _controlador.cambiarFiltro,
+              ),
+              const SizedBox(height: 8),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Mostrar inactivos'),
+                value: estado.mostrarInactivos,
+                onChanged: _controlador.cambiarMostrarInactivos,
+              ),
+              const SizedBox(height: 8),
+              SegmentedButton<int>(
+                segments: const [
+                  ButtonSegment(value: 0, label: Text('Lista')),
+                  ButtonSegment(value: 1, label: Text('Cuadrícula')),
+                ],
+                selected: {_vista},
+                onSelectionChanged: (s) async {
+                  final v = s.first;
+                  setState(() => _vista = v);
+                  await _guardarVista(v);
+                },
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: _nuevoProductoCompleto,
+                  icon: const Icon(Icons.add),
+                  label: const Text('Nuevo producto'),
+                ),
+              ),
+              const SizedBox(height: 12),
+              if (estado.error != null) ...[
+                Text(
+                  estado.error!,
+                  style: TextStyle(color: cs.error),
+                ),
+                const SizedBox(height: 12),
+              ],
+            ],
           ),
         ),
-        const SizedBox(height: 12),
-        if (estado.error != null) ...[
-          Text(
-            estado.error!,
-            style: TextStyle(color: Theme.of(context).colorScheme.error),
-          ),
-          const SizedBox(height: 12),
-        ],
-      ],
+      ),
     );
   }
 
@@ -200,6 +273,7 @@ class _InventarioPantallaState extends State<InventarioPantalla> {
               child: CustomScrollView(
                 slivers: [
                   SliverToBoxAdapter(child: _cabecera(estado)),
+                  const SliverToBoxAdapter(child: SizedBox(height: 12)),
                   if (_vista == 0)
                     _ListaProductosSliver(
                       controlador: _controlador,
@@ -224,16 +298,21 @@ class _InventarioPantallaState extends State<InventarioPantalla> {
                   flex: 5,
                   child: Padding(
                     padding: const EdgeInsets.all(12),
-                    child: _PanelDetalleProducto(
-                      productoId: _seleccionadoId,
-                      alAbrirDetalle: (id) {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => ProductoDetallePantalla(productoId: id),
-                          ),
-                        );
-                      },
+                    child: Card(
+                      clipBehavior: Clip.antiAlias,
+                      child: SizedBox.expand(
+                        child: _PanelDetalleProducto(
+                          productoId: _seleccionadoId,
+                          alAbrirDetalle: (id) {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => ProductoDetallePantalla(productoId: id),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -370,7 +449,9 @@ class _ProductoCuadro extends StatelessWidget {
     final theme = Theme.of(context);
 
     final enFalta = stock < producto.stockMinimo;
-    final color = enFalta ? theme.colorScheme.error : theme.colorScheme.primary;
+    final color = !producto.activo
+        ? theme.colorScheme.onSurfaceVariant
+        : (enFalta ? theme.colorScheme.error : theme.colorScheme.primary);
 
     final ruta = (producto.imagen ?? '').trim();
     final tieneImagen = ruta.isNotEmpty && File(ruta).existsSync();
@@ -416,10 +497,11 @@ class _ProductoCuadro extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: theme.textTheme.bodyMedium?.copyWith(color: color),
               ),
-              const SizedBox(height: 2),
-              Text(
-                enFalta ? 'Bajo mínimo' : 'OK',
-                style: theme.textTheme.labelSmall?.copyWith(color: color),
+              const SizedBox(height: 6),
+              _badgeEstado(
+                context,
+                enFalta: enFalta,
+                activo: producto.activo,
               ),
             ],
           ),
@@ -438,15 +520,42 @@ class _PanelDetalleProducto extends StatelessWidget {
     required this.alAbrirDetalle,
   });
 
+  String _d2(int n) => n.toString().padLeft(2, '0');
+
+  String _fecha(DateTime f) =>
+      '${_d2(f.day)}/${_d2(f.month)}/${f.year} ${_d2(f.hour)}:${_d2(f.minute)}';
+
+  String _textoTipo(String tipo) {
+    switch (tipo) {
+      case 'ingreso':
+        return 'Ingreso';
+      case 'egreso':
+        return 'Egreso';
+      case 'ajuste':
+        return 'Ajuste';
+      case 'devolucion':
+        return 'Devolución';
+      default:
+        return tipo;
+    }
+  }
+
+  double _cantidadConSigno(Movimiento m) {
+    if (m.tipo == 'egreso') return -m.cantidad;
+    if (m.tipo == 'ingreso' || m.tipo == 'devolucion') return m.cantidad;
+    return m.cantidad;
+  }
+
   @override
   Widget build(BuildContext context) {
     if (productoId == null) {
-      return Card(
+      return Center(
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Text(
             'Elegí un producto para ver el detalle acá.',
             style: Theme.of(context).textTheme.titleMedium,
+            textAlign: TextAlign.center,
           ),
         ),
       );
@@ -459,143 +568,143 @@ class _PanelDetalleProducto extends StatelessWidget {
           return const Center(child: CircularProgressIndicator());
         }
         final p = snapP.data;
-        if (p == null) return const Center(child: Text('Producto no encontrado'));
+        if (p == null) {
+          return const Center(child: Text('Producto no encontrado'));
+        }
 
         return FutureBuilder<double>(
           future: Proveedores.inventarioRepositorio.calcularStockActual(p.id),
           builder: (context, snapS) {
-            final stock = snapS.data ?? 0;
+            if (snapS.connectionState != ConnectionState.done) {
+              return const Center(child: CircularProgressIndicator());
+            }
+
+            final stock = snapS.data ?? 0.0;
             final enFalta = stock < p.stockMinimo;
-            final color = enFalta ? Theme.of(context).colorScheme.error : null;
+            final colorStock = enFalta ? Theme.of(context).colorScheme.error : null;
 
             final ruta = (p.imagen ?? '').trim();
             final tieneImagen = ruta.isNotEmpty && File(ruta).existsSync();
 
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(14),
-                          child: Container(
-                            width: double.infinity,
-                            height: 170,
-                            color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                            child: tieneImagen
-                                ? Image.file(File(ruta), fit: BoxFit.cover)
-                                : const Center(child: Icon(Icons.image_outlined, size: 48)),
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        Row(
+            return FutureBuilder<List<Movimiento>>(
+              future: Proveedores.inventarioRepositorio.listarMovimientosDeProducto(p.id),
+              builder: (context, snapM) {
+                if (snapM.connectionState != ConnectionState.done) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+
+                final movs = (snapM.data ?? [])..sort((a, b) => b.fecha.compareTo(a.fecha));
+
+                return CustomScrollView(
+                  slivers: [
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Expanded(
-                              child: Text(
-                                p.nombre,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: Theme.of(context).textTheme.titleLarge,
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(14),
+                              child: Container(
+                                width: double.infinity,
+                                height: 170,
+                                color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                                child: tieneImagen
+                                    ? Image.file(File(ruta), fit: BoxFit.cover)
+                                    : const Center(child: Icon(Icons.image_outlined, size: 48)),
                               ),
                             ),
-                            FilledButton.tonal(
-                              onPressed: () => alAbrirDetalle(p.id),
-                              child: const Text('Abrir detalle'),
+                            const SizedBox(height: 10),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    p.nombre,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(context).textTheme.titleLarge,
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                ConstrainedBox(
+                                  constraints: const BoxConstraints(maxWidth: 180),
+                                  child: FilledButton.tonal(
+                                    onPressed: () => alAbrirDetalle(p.id),
+                                    child: const Text('Abrir detalle'),
+                                  ),
+                                ),
+                              ],
                             ),
+                            const SizedBox(height: 6),
+                            Text('Unidad: ${_capPrimera(p.unidad)}'),
+                            const SizedBox(height: 6),
+                            Text(
+                              'Stock: ${stock.toStringAsFixed(2)} ${_unidadConCantidad(p.unidad, stock)}',
+                              style: TextStyle(color: colorStock),
+                            ),
+                            const SizedBox(height: 6),
+                            Text('Mínimo: ${p.stockMinimo.toStringAsFixed(2)}'),
+                            const SizedBox(height: 6),
+                            Text('Proveedor: ${p.proveedor ?? '-'}'),
                           ],
                         ),
-                        const SizedBox(height: 6),
-                        Text('Unidad: ${_capPrimera(p.unidad)}'),
-                        const SizedBox(height: 6),
-                        Text(
-                          'Stock: ${stock.toStringAsFixed(2)} ${_unidadConCantidad(p.unidad, stock)}',
-                          style: TextStyle(color: color),
-                        ),
-                        const SizedBox(height: 6),
-                        Text('Mínimo: ${p.stockMinimo.toStringAsFixed(2)}'),
-                        const SizedBox(height: 6),
-                        Text('Proveedor: ${p.proveedor ?? '-'}'),
-                      ],
+                      ),
                     ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Text('Movimientos', style: Theme.of(context).textTheme.titleMedium),
-                const SizedBox(height: 8),
-                Expanded(
-                  child: FutureBuilder<List<Movimiento>>(
-                    future: Proveedores.inventarioRepositorio.listarMovimientosDeProducto(p.id),
-                    builder: (context, snapM) {
-                      if (snapM.connectionState != ConnectionState.done) {
-                        return const Center(child: CircularProgressIndicator());
-                      }
-                      final movs = snapM.data ?? [];
-                      if (movs.isEmpty) {
-                        return const Center(child: Text('Todavía no hay movimientos'));
-                      }
+                    const SliverToBoxAdapter(child: SizedBox(height: 6)),
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        child: Text(
+                          'Movimientos',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                      ),
+                    ),
+                    const SliverToBoxAdapter(child: SizedBox(height: 8)),
+                    if (movs.isEmpty)
+                      const SliverFillRemaining(
+                        hasScrollBody: false,
+                        child: Center(child: Text('Todavía no hay movimientos')),
+                      )
+                    else
+                      SliverPadding(
+                        padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                        sliver: SliverList(
+                          delegate: SliverChildBuilderDelegate(
+                                (context, i) {
+                              final m = movs[i];
+                              final v = _cantidadConSigno(m);
+                              final txt =
+                                  '${v >= 0 ? '+' : '-'}${v.abs().toStringAsFixed(2)} ${_unidadConCantidad(p.unidad, v.abs())}';
+                              final cancelado = (m.nota ?? '').contains('CANCELADO');
 
-                      String d2(int n) => n.toString().padLeft(2, '0');
-                      String fecha(DateTime f) =>
-                          '${d2(f.day)}/${d2(f.month)}/${f.year} ${d2(f.hour)}:${d2(f.minute)}';
-
-                      String textoTipo(String tipo) {
-                        switch (tipo) {
-                          case 'ingreso':
-                            return 'Ingreso';
-                          case 'egreso':
-                            return 'Egreso';
-                          case 'ajuste':
-                            return 'Ajuste';
-                          case 'devolucion':
-                            return 'Devolución';
-                          default:
-                            return tipo;
-                        }
-                      }
-
-                      double cantidadConSigno(Movimiento m) {
-                        if (m.tipo == 'egreso') return -m.cantidad;
-                        if (m.tipo == 'ingreso' || m.tipo == 'devolucion') return m.cantidad;
-                        return m.cantidad;
-                      }
-
-                      return ListView.separated(
-                        itemCount: movs.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 8),
-                        itemBuilder: (context, i) {
-                          final m = movs[i];
-                          final v = cantidadConSigno(m);
-                          final txt =
-                              '${v >= 0 ? '+' : '-'}${v.abs().toStringAsFixed(2)} ${_unidadConCantidad(p.unidad, v.abs())}';
-
-                          final cancelado = (m.nota ?? '').contains('CANCELADO');
-
-                          return Card(
-                            child: ListTile(
-                              title: Text(textoTipo(m.tipo)),
-                              subtitle: Text(
-                                '${fecha(m.fecha)}\n${m.nota ?? ''}',
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              trailing: Text(
-                                txt,
-                                style: TextStyle(
-                                  color: cancelado ? Theme.of(context).disabledColor : null,
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 8),
+                                child: Card(
+                                  child: ListTile(
+                                    title: Text(_textoTipo(m.tipo)),
+                                    subtitle: Text(
+                                      '${_fecha(m.fecha)}${(m.nota ?? '').trim().isEmpty ? '' : '\n${m.nota ?? ''}'}',
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    trailing: Text(
+                                      txt,
+                                      style: TextStyle(
+                                        color: cancelado ? Theme.of(context).disabledColor : null,
+                                      ),
+                                    ),
+                                  ),
                                 ),
-                              ),
-                            ),
-                          );
-                        },
-                      );
-                    },
-                  ),
-                ),
-              ],
+                              );
+                            },
+                            childCount: movs.length,
+                          ),
+                        ),
+                      ),
+                  ],
+                );
+              },
             );
           },
         );
@@ -604,19 +713,16 @@ class _PanelDetalleProducto extends StatelessWidget {
   }
 }
 
-class _ProductoNuevoPantalla extends StatefulWidget {
-  const _ProductoNuevoPantalla();
+class _ProductoNuevoSheet extends StatefulWidget {
+  const _ProductoNuevoSheet();
 
   @override
-  State<_ProductoNuevoPantalla> createState() => _ProductoNuevoPantallaState();
+  State<_ProductoNuevoSheet> createState() => _ProductoNuevoSheetState();
 }
 
-class _ProductoNuevoPantallaState extends State<_ProductoNuevoPantalla> {
+class _ProductoNuevoSheetState extends State<_ProductoNuevoSheet> {
   final _nombreCtrl = TextEditingController();
-
-  // se mantiene para no romper el resto
   final _unidadCtrl = TextEditingController(text: 'unidad');
-
   final _minimoCtrl = TextEditingController(text: '0');
   final _costoCtrl = TextEditingController(text: '0');
   final _precioCtrl = TextEditingController(text: '0');
@@ -628,14 +734,6 @@ class _ProductoNuevoPantallaState extends State<_ProductoNuevoPantalla> {
 
   bool _guardando = false;
   String? _error;
-
-  @override
-  void initState() {
-    super.initState();
-    _unidadSeleccion = 'unidad';
-    _usarOtro = false;
-    _unidadCtrl.text = 'unidad';
-  }
 
   @override
   void dispose() {
@@ -731,107 +829,125 @@ class _ProductoNuevoPantallaState extends State<_ProductoNuevoPantalla> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Nuevo producto')),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: EdgeInsets.fromLTRB(
-            12,
-            12,
-            12,
-            12 + MediaQuery.of(context).viewInsets.bottom,
-          ),
-          child: Column(
+    final bottom = MediaQuery.of(context).viewInsets.bottom;
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(16, 10, 16, 16 + bottom),
+      child: Column(
+        children: [
+          Row(
             children: [
-              TextField(
-                controller: _nombreCtrl,
-                enabled: !_guardando,
-                decoration: const InputDecoration(labelText: 'Nombre'),
+              Text('Nuevo producto', style: Theme.of(context).textTheme.titleLarge),
+              const Spacer(),
+              IconButton(
+                onPressed: _guardando ? null : () => Navigator.pop(context, null),
+                icon: const Icon(Icons.close),
+                tooltip: 'Cerrar',
               ),
-              const SizedBox(height: 12),
-
-              DropdownButtonFormField<String>(
-                value: _unidadSeleccion,
-                items: _unidadesOpciones
-                    .map((u) => DropdownMenuItem<String>(
-                  value: u,
-                  child: Text(_capPrimera(u)),
-                ))
-                    .toList(),
-                onChanged: _guardando
-                    ? null
-                    : (v) {
-                  final val = v ?? 'unidad';
-                  setState(() {
-                    _unidadSeleccion = val;
-                    _usarOtro = val == 'Otro';
-                    if (!_usarOtro) {
-                      _unidadCtrl.text = val; // se guarda en minúsculas
-                    } else {
-                      if (_unidadCtrl.text.trim().isEmpty ||
-                          _unidadesOpciones.contains(_unidadCtrl.text.trim())) {
-                        _unidadCtrl.text = '';
-                      }
-                    }
-                  });
-                },
-                decoration: const InputDecoration(labelText: 'Unidad'),
-              ),
-
-              if (_usarOtro) ...[
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _unidadCtrl,
-                  enabled: !_guardando,
-                  decoration: const InputDecoration(labelText: 'Unidad personalizada'),
-                ),
-              ],
-
-              const SizedBox(height: 12),
-              TextField(
-                controller: _minimoCtrl,
-                enabled: !_guardando,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: const InputDecoration(labelText: 'Stock mínimo'),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _costoCtrl,
-                enabled: !_guardando,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: const InputDecoration(labelText: 'Costo actual'),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _precioCtrl,
-                enabled: !_guardando,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: const InputDecoration(labelText: 'Precio sugerido'),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _proveedorCtrl,
-                enabled: !_guardando,
-                decoration: const InputDecoration(labelText: 'Proveedor (opcional)'),
-              ),
-              const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  onPressed: _guardando ? null : _guardar,
-                  child: Text(_guardando ? 'Guardando...' : 'Guardar'),
-                ),
-              ),
-              if (_error != null) ...[
-                const SizedBox(height: 12),
-                Text(
-                  _error!,
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
-                ),
-              ],
             ],
           ),
-        ),
+          const SizedBox(height: 8),
+          Expanded(
+            child: SingleChildScrollView(
+              child: Column(
+                children: [
+                  TextField(
+                    controller: _nombreCtrl,
+                    enabled: !_guardando,
+                    decoration: const InputDecoration(labelText: 'Nombre'),
+                    textInputAction: TextInputAction.next,
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    value: _unidadSeleccion,
+                    items: _unidadesOpciones
+                        .map((u) => DropdownMenuItem<String>(
+                      value: u,
+                      child: Text(_capPrimera(u)),
+                    ))
+                        .toList(),
+                    onChanged: _guardando
+                        ? null
+                        : (v) {
+                      final val = v ?? 'unidad';
+                      setState(() {
+                        _unidadSeleccion = val;
+                        _usarOtro = val == 'Otro';
+                        if (!_usarOtro) {
+                          _unidadCtrl.text = val;
+                        } else {
+                          if (_unidadCtrl.text.trim().isEmpty ||
+                              _unidadesOpciones.contains(_unidadCtrl.text.trim())) {
+                            _unidadCtrl.text = '';
+                          }
+                        }
+                      });
+                    },
+                    decoration: const InputDecoration(labelText: 'Unidad'),
+                  ),
+                  if (_usarOtro) ...[
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _unidadCtrl,
+                      enabled: !_guardando,
+                      decoration: const InputDecoration(labelText: 'Unidad personalizada'),
+                      textInputAction: TextInputAction.next,
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _minimoCtrl,
+                    enabled: !_guardando,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    decoration: const InputDecoration(labelText: 'Stock mínimo'),
+                    textInputAction: TextInputAction.next,
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _costoCtrl,
+                    enabled: !_guardando,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    decoration: const InputDecoration(labelText: 'Costo actual'),
+                    textInputAction: TextInputAction.next,
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _precioCtrl,
+                    enabled: !_guardando,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    decoration: const InputDecoration(labelText: 'Precio sugerido'),
+                    textInputAction: TextInputAction.next,
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _proveedorCtrl,
+                    enabled: !_guardando,
+                    decoration: const InputDecoration(labelText: 'Proveedor (opcional)'),
+                    textInputAction: TextInputAction.done,
+                  ),
+                  if (_error != null) ...[
+                    const SizedBox(height: 12),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        _error!,
+                        style: TextStyle(color: Theme.of(context).colorScheme.error),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              onPressed: _guardando ? null : _guardar,
+              child: Text(_guardando ? 'Guardando...' : 'Guardar'),
+            ),
+          ),
+        ],
       ),
     );
   }

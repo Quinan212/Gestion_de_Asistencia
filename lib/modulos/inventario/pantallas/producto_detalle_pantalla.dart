@@ -22,6 +22,12 @@ class _ProductoDetallePantallaState extends State<ProductoDetallePantalla>
     with SingleTickerProviderStateMixin {
   static const double _kTablet = 900;
 
+  // ancho máximo cómodo para el detalle en tablet
+  static const double _kMaxPageWidth = 1120;
+
+  // sheets: ancho/alto máximo (no gigantones)
+  static const double _kMaxSheetWidth = 620;
+
   String _moneda = r'$';
 
   static const _unidadesOpciones = <String>['unidad', 'pack', 'caja', 'kg', 'Otro'];
@@ -39,14 +45,13 @@ class _ProductoDetallePantallaState extends State<ProductoDetallePantalla>
 
     _productoFuture = _cargarProducto();
     _stockFuture = _cargarStock();
-    _movsFuture = Proveedores.inventarioRepositorio
-        .listarMovimientosDeProducto(widget.productoId);
+    _movsFuture =
+        Proveedores.inventarioRepositorio.listarMovimientosDeProducto(widget.productoId);
 
     _tabController = TabController(length: 2, vsync: this);
     _tabController.addListener(() {
       if (!mounted) return;
       if (_tabController.indexIsChanging) return;
-      // solo para anim/estado del botón, NO recarga futures
       setState(() {});
     });
 
@@ -59,20 +64,22 @@ class _ProductoDetallePantallaState extends State<ProductoDetallePantalla>
     super.dispose();
   }
 
+  bool _esTabletUI(BuildContext context) => MediaQuery.of(context).size.width >= _kTablet;
+
   void _refreshTodo() {
     setState(() {
       _productoFuture = _cargarProducto();
       _stockFuture = _cargarStock();
-      _movsFuture = Proveedores.inventarioRepositorio
-          .listarMovimientosDeProducto(widget.productoId);
+      _movsFuture =
+          Proveedores.inventarioRepositorio.listarMovimientosDeProducto(widget.productoId);
     });
   }
 
   void _refreshStockYMovs() {
     setState(() {
       _stockFuture = _cargarStock();
-      _movsFuture = Proveedores.inventarioRepositorio
-          .listarMovimientosDeProducto(widget.productoId);
+      _movsFuture =
+          Proveedores.inventarioRepositorio.listarMovimientosDeProducto(widget.productoId);
     });
   }
 
@@ -99,6 +106,49 @@ class _ProductoDetallePantallaState extends State<ProductoDetallePantalla>
     );
     if (!mounted) return;
     _refreshStockYMovs();
+  }
+
+  // sheet “normal” y acotado (tablet: centrado, más bajo; móvil: bottom-sheet normal)
+  Future<T?> _showAdaptiveSheet<T>({
+    required WidgetBuilder builder,
+    bool showHandle = true,
+  }) {
+    final media = MediaQuery.of(context);
+    final esTablet = _esTabletUI(context);
+
+    final maxH = (media.size.height * (esTablet ? 0.72 : 0.92)).clamp(260.0, 720.0);
+
+    return showModalBottomSheet<T>(
+      context: context,
+      useSafeArea: true,
+      isScrollControlled: true,
+      showDragHandle: showHandle,
+      constraints: BoxConstraints(
+        maxWidth: esTablet ? _kMaxSheetWidth : double.infinity,
+        maxHeight: maxH,
+      ),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (ctx) {
+        final bottom = MediaQuery.viewInsetsOf(ctx).bottom;
+        return Padding(
+          padding: EdgeInsets.only(bottom: bottom),
+          child: builder(ctx),
+        );
+      },
+    );
+  }
+
+  // wrapper para el contenido en tablet (no ancho infinito)
+  Widget _pageWrapTablet(Widget child) {
+    return Align(
+      alignment: Alignment.topCenter,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: _kMaxPageWidth),
+        child: child,
+      ),
+    );
   }
 
   String _capPrimera(String s) {
@@ -158,22 +208,15 @@ class _ProductoDetallePantallaState extends State<ProductoDetallePantalla>
 
     double parseNum(String t) => double.tryParse(t.trim().replaceAll(',', '.')) ?? 0.0;
 
-    final ok = await showModalBottomSheet<bool>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      showDragHandle: true,
+    final ok = await _showAdaptiveSheet<bool>(
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setStateLocal) {
-            final bottom = MediaQuery.of(context).viewInsets.bottom;
-
-            return Padding(
-              padding: EdgeInsets.fromLTRB(16, 8, 16, 16 + bottom),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Row(
+            return Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 10, 10, 6),
+                  child: Row(
                     children: [
                       Text('Editar producto', style: Theme.of(context).textTheme.titleLarge),
                       const Spacer(),
@@ -184,93 +227,96 @@ class _ProductoDetallePantallaState extends State<ProductoDetallePantalla>
                       ),
                     ],
                   ),
-                  const SizedBox(height: 8),
-                  Flexible(
-                    child: SingleChildScrollView(
-                      child: Column(
-                        children: [
-                          TextField(
-                            controller: nombreCtrl,
-                            decoration: const InputDecoration(labelText: 'Nombre'),
-                            textInputAction: TextInputAction.next,
-                          ),
-                          const SizedBox(height: 12),
-                          DropdownMenu<String>(
-                            initialSelection: unidadSel,
-                            expandedInsets: EdgeInsets.zero,
-                            label: const Text('Unidad'),
-                            dropdownMenuEntries: _unidadesOpciones
-                                .map((u) => DropdownMenuEntry<String>(
-                              value: u,
-                              label: _capPrimera(u),
-                            ))
-                                .toList(),
-                            onSelected: (v) {
-                              final val = v ?? 'unidad';
-                              setStateLocal(() {
-                                unidadSel = val;
-                                usarOtro = val == 'Otro';
-                                if (!usarOtro) {
-                                  unidadCtrl.text = val;
-                                } else {
-                                  if (unidadCtrl.text.trim().isEmpty ||
-                                      _unidadesOpciones.contains(
-                                        unidadCtrl.text.trim().toLowerCase(),
-                                      )) {
-                                    unidadCtrl.text = '';
-                                  }
+                ),
+                const Divider(height: 1),
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                    child: Column(
+                      children: [
+                        TextField(
+                          controller: nombreCtrl,
+                          decoration: const InputDecoration(labelText: 'Nombre'),
+                          textInputAction: TextInputAction.next,
+                        ),
+                        const SizedBox(height: 12),
+                        DropdownMenu<String>(
+                          initialSelection: unidadSel,
+                          expandedInsets: EdgeInsets.zero,
+                          label: const Text('Unidad'),
+                          dropdownMenuEntries: _unidadesOpciones
+                              .map((u) => DropdownMenuEntry<String>(
+                            value: u,
+                            label: _capPrimera(u),
+                          ))
+                              .toList(),
+                          onSelected: (v) {
+                            final val = v ?? 'unidad';
+                            setStateLocal(() {
+                              unidadSel = val;
+                              usarOtro = val == 'Otro';
+                              if (!usarOtro) {
+                                unidadCtrl.text = val;
+                              } else {
+                                if (unidadCtrl.text.trim().isEmpty ||
+                                    _unidadesOpciones.contains(
+                                      unidadCtrl.text.trim().toLowerCase(),
+                                    )) {
+                                  unidadCtrl.text = '';
                                 }
-                              });
-                            },
-                          ),
-                          if (usarOtro) ...[
-                            const SizedBox(height: 12),
-                            TextField(
-                              controller: unidadCtrl,
-                              decoration: const InputDecoration(labelText: 'Unidad personalizada'),
-                              textInputAction: TextInputAction.next,
-                            ),
-                          ],
+                              }
+                            });
+                          },
+                        ),
+                        if (usarOtro) ...[
                           const SizedBox(height: 12),
                           TextField(
-                            controller: minimoCtrl,
-                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                            decoration: const InputDecoration(labelText: 'Stock mínimo'),
+                            controller: unidadCtrl,
+                            decoration: const InputDecoration(labelText: 'Unidad personalizada'),
                             textInputAction: TextInputAction.next,
-                          ),
-                          const SizedBox(height: 12),
-                          TextField(
-                            controller: costoCtrl,
-                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                            decoration: InputDecoration(labelText: 'Costo actual ($_moneda)'),
-                            textInputAction: TextInputAction.next,
-                          ),
-                          const SizedBox(height: 12),
-                          TextField(
-                            controller: precioCtrl,
-                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                            decoration: InputDecoration(labelText: 'Precio sugerido ($_moneda)'),
-                            textInputAction: TextInputAction.next,
-                          ),
-                          const SizedBox(height: 12),
-                          TextField(
-                            controller: proveedorCtrl,
-                            decoration: const InputDecoration(labelText: 'Proveedor (opcional)'),
-                            textInputAction: TextInputAction.done,
-                          ),
-                          const SizedBox(height: 12),
-                          SwitchListTile(
-                            contentPadding: EdgeInsets.zero,
-                            title: const Text('Activo'),
-                            value: activo,
-                            onChanged: (v) => setStateLocal(() => activo = v),
                           ),
                         ],
-                      ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: minimoCtrl,
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          decoration: const InputDecoration(labelText: 'Stock mínimo'),
+                          textInputAction: TextInputAction.next,
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: costoCtrl,
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          decoration: InputDecoration(labelText: 'Costo actual ($_moneda)'),
+                          textInputAction: TextInputAction.next,
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: precioCtrl,
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          decoration: InputDecoration(labelText: 'Precio sugerido ($_moneda)'),
+                          textInputAction: TextInputAction.next,
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: proveedorCtrl,
+                          decoration: const InputDecoration(labelText: 'Proveedor (opcional)'),
+                          textInputAction: TextInputAction.done,
+                        ),
+                        const SizedBox(height: 12),
+                        SwitchListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: const Text('Activo'),
+                          value: activo,
+                          onChanged: (v) => setStateLocal(() => activo = v),
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 12),
-                  Row(
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
+                  child: Row(
                     children: [
                       Expanded(
                         child: OutlinedButton(
@@ -292,8 +338,8 @@ class _ProductoDetallePantallaState extends State<ProductoDetallePantalla>
                       ),
                     ],
                   ),
-                ],
-              ),
+                ),
+              ],
             );
           },
         );
@@ -323,8 +369,6 @@ class _ProductoDetallePantallaState extends State<ProductoDetallePantalla>
     );
 
     if (!mounted) return;
-
-    // producto cambió: refrescamos todo (incluye nombre/unidad/etc)
     _refreshTodo();
   }
 
@@ -398,20 +442,15 @@ class _ProductoDetallePantallaState extends State<ProductoDetallePantalla>
   }
 
   Future<void> _cambiarFoto(Producto p) async {
-    final opcion = await showModalBottomSheet<int>(
-      context: context,
-      showDragHandle: true,
-      useSafeArea: true,
+    final opcion = await _showAdaptiveSheet<int>(
       builder: (context) {
         return Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             const SizedBox(height: 6),
-            const Text(
-              'Foto del producto',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 10),
+            Text('Foto del producto', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 6),
+            const Divider(height: 1),
             ListTile(
               leading: const Icon(Icons.photo_library_outlined),
               title: const Text('Galería'),
@@ -429,10 +468,11 @@ class _ProductoDetallePantallaState extends State<ProductoDetallePantalla>
               iconColor: Theme.of(context).colorScheme.error,
               onTap: () => Navigator.pop(context, 2),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 10),
           ],
         );
       },
+      showHandle: true,
     );
 
     if (opcion == null) return;
@@ -620,7 +660,7 @@ class _ProductoDetallePantallaState extends State<ProductoDetallePantalla>
     required EdgeInsets padding,
   }) {
     return FutureBuilder<List<Movimiento>>(
-      future: _movsFuture, // cacheado
+      future: _movsFuture,
       builder: (context, snapM) {
         if (snapM.connectionState != ConnectionState.done) {
           return const Center(child: CircularProgressIndicator());
@@ -646,13 +686,18 @@ class _ProductoDetallePantallaState extends State<ProductoDetallePantalla>
             return Card(
               clipBehavior: Clip.antiAlias,
               child: ListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                 onTap: () => _verDetalleMovimiento(m, unidad),
                 leading: Icon(_iconoTipoMov(m.tipo)),
-                title: Text(_textoTipo(m.tipo)),
+                title: Text(_textoTipo(m.tipo), style: Theme.of(context).textTheme.titleMedium),
                 subtitle: Text(
                   '${_fecha(m.fecha)}${(m.nota ?? '').trim().isEmpty ? '' : '\n${m.nota ?? ''}'}',
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodySmall
+                      ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
                 ),
                 trailing: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -660,8 +705,8 @@ class _ProductoDetallePantallaState extends State<ProductoDetallePantalla>
                   children: [
                     Text(
                       cantTxt,
-                      style: TextStyle(
-                        fontWeight: FontWeight.w700,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
                         color: cancelado
                             ? Theme.of(context).disabledColor
                             : (v < 0 ? cs.error : cs.primary),
@@ -773,7 +818,7 @@ class _ProductoDetallePantallaState extends State<ProductoDetallePantalla>
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.right,
-              style: strong ? t.titleMedium : t.bodyMedium,
+              style: strong ? t.titleMedium?.copyWith(fontWeight: FontWeight.w800) : t.bodyMedium,
             ),
           ),
         ),
@@ -823,9 +868,17 @@ class _ProductoDetallePantallaState extends State<ProductoDetallePantalla>
         _bloque(
           'Precios',
           [
-            _filaDetalle(Icons.payments_outlined, 'Costo actual', Formatos.dinero(_moneda, p.costoActual),
-                strong: true),
-            _filaDetalle(Icons.sell_outlined, 'Precio sugerido', Formatos.dinero(_moneda, p.precioSugerido)),
+            _filaDetalle(
+              Icons.payments_outlined,
+              'Costo actual',
+              Formatos.dinero(_moneda, p.costoActual),
+              strong: true,
+            ),
+            _filaDetalle(
+              Icons.sell_outlined,
+              'Precio sugerido',
+              Formatos.dinero(_moneda, p.precioSugerido),
+            ),
           ],
         ),
       ],
@@ -929,86 +982,96 @@ class _ProductoDetallePantallaState extends State<ProductoDetallePantalla>
   }) {
     final enFalta = stock < p.stockMinimo;
 
-    return Padding(
-      padding: const EdgeInsets.all(12),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 420,
-            child: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _heroFoto(p),
-                  const SizedBox(height: 12),
-                  Text(
-                    p.nombre,
-                    style: Theme.of(context).textTheme.headlineSmall,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      _chip(
-                        p.activo ? 'Activo' : 'Inactivo',
-                        p.activo ? Icons.check_circle_outline : Icons.pause_circle_outline,
-                      ),
-                      if (enFalta) _chip('Bajo mínimo', Icons.warning_amber_outlined),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  _statsCard(p: p, stock: stock),
-                  const SizedBox(height: 12),
-                  FilledButton.icon(
-                    onPressed: _nuevoMovimiento,
-                    icon: const Icon(Icons.add),
-                    label: const Text('Nuevo movimiento'),
-                  ),
-                  const SizedBox(height: 12),
-                  _detallesCard(p: p),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Card(
-              clipBehavior: Clip.antiAlias,
-              child: Column(
-                children: [
-                  Material(
-                    color: Theme.of(context).colorScheme.surface,
-                    child: TabBar(
-                      controller: _tabController,
-                      tabs: const [
-                        Tab(text: 'Detalles'),
-                        Tab(text: 'Movimientos'),
-                      ],
+    const leftWidth = 380.0;
+
+    return _pageWrapTablet(
+      Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          children: [
+            SizedBox(
+              width: leftWidth,
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _heroFoto(p),
+                    const SizedBox(height: 12),
+                    Text(
+                      p.nombre,
+                      style: Theme.of(context).textTheme.headlineSmall,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                  ),
-                  Expanded(
-                    child: TabBarView(
-                      controller: _tabController,
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
                       children: [
-                        SingleChildScrollView(
-                          padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-                          child: _detallesCard(p: p),
+                        _chip(
+                          p.activo ? 'Activo' : 'Inactivo',
+                          p.activo ? Icons.check_circle_outline : Icons.pause_circle_outline,
                         ),
-                        _listaMovimientos(
-                          unidad: p.unidad,
-                          padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+                        if (enFalta) _chip('Bajo mínimo', Icons.warning_amber_outlined),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    _statsCard(p: p, stock: stock),
+                    const SizedBox(height: 12),
+                    FilledButton.icon(
+                      onPressed: _nuevoMovimiento,
+                      icon: const Icon(Icons.add),
+                      label: const Text('Nuevo movimiento'),
+                    ),
+                    const SizedBox(height: 12),
+                    _detallesCard(p: p),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Align(
+                alignment: Alignment.topCenter,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 720),
+                  child: Card(
+                    clipBehavior: Clip.antiAlias,
+                    child: Column(
+                      children: [
+                        Material(
+                          color: Theme.of(context).colorScheme.surface,
+                          child: TabBar(
+                            controller: _tabController,
+                            tabs: const [
+                              Tab(text: 'Detalles'),
+                              Tab(text: 'Movimientos'),
+                            ],
+                          ),
+                        ),
+                        Expanded(
+                          child: TabBarView(
+                            controller: _tabController,
+                            children: [
+                              SingleChildScrollView(
+                                padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+                                child: _detallesCard(p: p),
+                              ),
+                              _listaMovimientos(
+                                unidad: p.unidad,
+                                padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+                              ),
+                            ],
+                          ),
                         ),
                       ],
                     ),
                   ),
-                ],
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -1018,7 +1081,7 @@ class _ProductoDetallePantallaState extends State<ProductoDetallePantalla>
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<Producto?>(
-      future: _productoFuture, // cacheado
+      future: _productoFuture,
       builder: (context, snapP) {
         final p = snapP.data;
 
@@ -1037,7 +1100,7 @@ class _ProductoDetallePantallaState extends State<ProductoDetallePantalla>
               : p == null
               ? const Center(child: Text('Producto no encontrado'))
               : FutureBuilder<double>(
-            future: _stockFuture, // cacheado
+            future: _stockFuture,
             builder: (context, snapS) {
               final stock = snapS.data ?? 0;
 

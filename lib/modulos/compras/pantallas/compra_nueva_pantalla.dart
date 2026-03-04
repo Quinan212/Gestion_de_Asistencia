@@ -1,10 +1,11 @@
+// lib/modulos/compras/pantallas/compra_nueva_pantalla.dart
 import 'dart:io';
 
 import 'package:flutter/material.dart';
 
 import 'package:gestion_de_stock/aplicacion/utiles/formatos.dart';
-import '/infraestructura/dep_inyeccion/proveedores.dart';
-import '/modulos/inventario/modelos/producto.dart';
+import 'package:gestion_de_stock/infraestructura/dep_inyeccion/proveedores.dart';
+import 'package:gestion_de_stock/modulos/inventario/modelos/producto.dart';
 
 class CompraNuevaPantalla extends StatefulWidget {
   const CompraNuevaPantalla({super.key});
@@ -14,6 +15,9 @@ class CompraNuevaPantalla extends StatefulWidget {
 }
 
 class _CompraNuevaPantallaState extends State<CompraNuevaPantalla> {
+  static const double _kTablet = 900;
+  static const double _kMaxAnchoTablet = 620;
+
   String _moneda = r'$';
 
   final _proveedorCtrl = TextEditingController();
@@ -264,9 +268,7 @@ class _CompraNuevaPantallaState extends State<CompraNuevaPantalla> {
   }
 
   void _borrarLinea(int index) {
-    setState(() {
-      _lineas.removeAt(index);
-    });
+    setState(() => _lineas.removeAt(index));
   }
 
   Future<void> _confirmarCompra() async {
@@ -351,116 +353,156 @@ class _CompraNuevaPantallaState extends State<CompraNuevaPantalla> {
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Nueva compra')),
-      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _guardando ? null : _agregarLinea,
-        icon: const Icon(Icons.add),
-        label: const Text('Agregar producto'),
+  Widget _contenido(BuildContext context, {required bool esTablet}) {
+    final inner = SingleChildScrollView(
+      padding: EdgeInsets.fromLTRB(
+        12,
+        12,
+        12,
+        12 + MediaQuery.of(context).viewInsets.bottom,
       ),
-      body: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 12, 12, 96),
-        child: Column(
-          children: [
-            TextField(
-              controller: _proveedorCtrl,
-              enabled: !_guardando,
-              decoration: const InputDecoration(labelText: 'Proveedor (opcional)'),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _notaCtrl,
-              enabled: !_guardando,
-              decoration: const InputDecoration(labelText: 'Nota (opcional)'),
-            ),
-            const SizedBox(height: 12),
-            Expanded(
-              child: _lineas.isEmpty
-                  ? const Center(child: Text('Agregá productos a la compra'))
-                  : ListView.separated(
-                itemCount: _lineas.length,
-                separatorBuilder: (context, index) => const SizedBox(height: 8),
-                itemBuilder: (context, i) {
-                  final l = _lineas[i];
-                  final okImg = (l.imagen ?? '').trim().isNotEmpty &&
-                      File((l.imagen ?? '').trim()).existsSync();
+      child: Column(
+        children: [
+          TextField(
+            controller: _proveedorCtrl,
+            enabled: !_guardando,
+            decoration: const InputDecoration(labelText: 'Proveedor (opcional)'),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _notaCtrl,
+            enabled: !_guardando,
+            decoration: const InputDecoration(labelText: 'Nota (opcional)'),
+          ),
+          const SizedBox(height: 12),
 
-                  return Dismissible(
-                    key: ValueKey('linea_$i-${l.productoId}'),
-                    direction: DismissDirection.endToStart,
-                    background: Container(
-                      alignment: Alignment.centerRight,
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      color: Theme.of(context).colorScheme.error,
-                      child: const Icon(Icons.delete, color: Colors.white),
-                    ),
-                    onDismissed: (_) => _borrarLinea(i),
-                    child: Card(
-                      child: ListTile(
-                        leading: okImg
-                            ? ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: Image.file(
-                            File((l.imagen ?? '').trim()),
-                            width: 40,
-                            height: 40,
-                            fit: BoxFit.cover,
-                          ),
-                        )
-                            : const Icon(Icons.image_outlined),
-                        title: Text(
-                          l.nombre,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+          // BOTÓN ARRIBA (no flotante)
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: _guardando ? null : _agregarLinea,
+              icon: const Icon(Icons.add),
+              label: const Text('Agregar producto'),
+            ),
+          ),
+
+          const SizedBox(height: 12),
+
+          // LISTA dentro del scroll (no Expanded)
+          if (_lineas.isEmpty)
+            const Padding(
+              padding: EdgeInsets.only(top: 18),
+              child: Center(child: Text('Agregá productos a la compra')),
+            )
+          else
+            ListView.separated(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: _lineas.length,
+              separatorBuilder: (context, index) => const SizedBox(height: 8),
+              itemBuilder: (context, i) {
+                final l = _lineas[i];
+                final ruta = (l.imagen ?? '').trim();
+                final okImg = ruta.isNotEmpty && File(ruta).existsSync();
+
+                return Dismissible(
+                  key: ValueKey('linea_$i-${l.productoId}'),
+                  direction: DismissDirection.endToStart,
+                  background: Container(
+                    alignment: Alignment.centerRight,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    color: Theme.of(context).colorScheme.error,
+                    child: const Icon(Icons.delete, color: Colors.white),
+                  ),
+                  onDismissed: (_) => _borrarLinea(i),
+                  child: Card(
+                    child: ListTile(
+                      leading: okImg
+                          ? ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.file(
+                          File(ruta),
+                          width: 40,
+                          height: 40,
+                          fit: BoxFit.cover,
                         ),
-                        subtitle: Text(
-                          'Cantidad: ${l.cantidad.toStringAsFixed(2)} ${l.unidad}\n'
-                              'Costo: ${Formatos.dinero(_moneda, l.costoUnitario)}',
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        trailing: Text(
-                          Formatos.dinero(_moneda, l.subtotal),
-                          style: Theme.of(context).textTheme.titleMedium,
-                        ),
+                      )
+                          : const Icon(Icons.image_outlined),
+                      title: Text(
+                        l.nombre,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      subtitle: Text(
+                        'Cantidad: ${l.cantidad.toStringAsFixed(2)} ${l.unidad}\n'
+                            'Costo: ${Formatos.dinero(_moneda, l.costoUnitario)}',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      trailing: Text(
+                        Formatos.dinero(_moneda, l.subtotal),
+                        style: Theme.of(context).textTheme.titleMedium,
                       ),
                     ),
-                  );
-                },
-              ),
+                  ),
+                );
+              },
             ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                const Expanded(child: Text('Total')),
-                Text(
-                  Formatos.dinero(_moneda, _total),
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: _guardando ? null : _confirmarCompra,
-                child: Text(_guardando ? 'Guardando...' : 'Confirmar compra'),
-              ),
-            ),
-            if (_error != null) ...[
-              const SizedBox(height: 12),
+
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              const Expanded(child: Text('Total')),
               Text(
-                _error!,
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
+                Formatos.dinero(_moneda, _total),
+                style: Theme.of(context).textTheme.titleLarge,
               ),
             ],
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              onPressed: _guardando ? null : _confirmarCompra,
+              child: Text(_guardando ? 'Guardando...' : 'Confirmar compra'),
+            ),
+          ),
+          if (_error != null) ...[
             const SizedBox(height: 12),
+            Text(
+              _error!,
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
           ],
-        ),
+          const SizedBox(height: 12),
+        ],
       ),
+    );
+
+    if (!esTablet) return inner;
+
+    return Align(
+      alignment: Alignment.topCenter,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: _kMaxAnchoTablet),
+        child: inner,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, c) {
+        final esTablet = c.maxWidth >= _kTablet;
+
+        return Scaffold(
+          appBar: AppBar(title: const Text('Nueva compra')),
+          body: SafeArea(
+            child: _contenido(context, esTablet: esTablet),
+          ),
+        );
+      },
     );
   }
 }

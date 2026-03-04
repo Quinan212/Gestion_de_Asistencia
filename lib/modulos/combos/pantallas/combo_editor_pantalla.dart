@@ -1,3 +1,4 @@
+// lib/modulos/combos/pantallas/combo_editor_pantalla.dart
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -309,6 +310,47 @@ class _ComboEditorPantallaState extends State<ComboEditorPantalla> {
     return capacidad.floorToDouble();
   }
 
+  Widget _headerEmbebido(Combo combo) {
+    // FIX: en vez de 4 IconButton en una sola Row (que desborda),
+    // usamos Wrap para que haga salto de línea si falta ancho.
+    final cs = Theme.of(context).colorScheme;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          combo.nombre,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.titleLarge,
+        ),
+        const SizedBox(height: 6),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            FilledButton.tonalIcon(
+              onPressed: () => _editarCombo(combo),
+              icon: const Icon(Icons.edit),
+              label: const Text('Editar'),
+            ),
+            FilledButton.tonalIcon(
+              onPressed: _limpiarReceta,
+              icon: Icon(Icons.delete_sweep_outlined, color: cs.error),
+              label: Text('Limpiar', style: TextStyle(color: cs.error)),
+            ),
+            FilledButton.tonalIcon(
+              onPressed: () => setState(() {}),
+              icon: const Icon(Icons.refresh),
+              label: const Text('Actualizar'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+      ],
+    );
+  }
+
   Widget _contenido() {
     return FutureBuilder<Combo?>(
       future: _cargarCombo(),
@@ -344,38 +386,15 @@ class _ComboEditorPantallaState extends State<ComboEditorPantalla> {
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      if (widget.embebido) ...[
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                combo.nombre,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: Theme.of(context).textTheme.titleLarge,
-                              ),
-                            ),
-                            IconButton(
-                              onPressed: () => _editarCombo(combo),
-                              icon: const Icon(Icons.edit),
-                              tooltip: 'Editar',
-                            ),
-                            IconButton(
-                              onPressed: _limpiarReceta,
-                              icon: const Icon(Icons.delete_sweep_outlined),
-                              tooltip: 'Limpiar receta',
-                            ),
-                            IconButton(
-                              onPressed: () => setState(() {}),
-                              icon: const Icon(Icons.refresh),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                      ],
+                      if (widget.embebido) _headerEmbebido(combo),
 
-                      Text('Precio: ${Formatos.dinero(_moneda, combo.precioVenta)}'),
+                      Text(
+                        'Precio: ${Formatos.dinero(_moneda, combo.precioVenta)}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                       const SizedBox(height: 12),
+
                       SwitchListTile(
                         contentPadding: EdgeInsets.zero,
                         title: const Text('Activo'),
@@ -393,33 +412,46 @@ class _ComboEditorPantallaState extends State<ComboEditorPantalla> {
                           setState(() {});
                         },
                       ),
+
                       const SizedBox(height: 12),
                       FutureBuilder<double>(
                         future: _calcularCapacidad(componentes),
                         builder: (context, snapCap) {
                           final cap = snapCap.data ?? 0;
-                          return Text('Podés armar: ${cap.toStringAsFixed(0)} combos');
+                          return Text(
+                            'Podés armar: ${cap.toStringAsFixed(0)} combos',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          );
                         },
                       ),
+
                       const SizedBox(height: 12),
 
                       Row(
                         children: [
                           Expanded(
                             child: Text(
-                              'Componentes',
+                              'Productos',
                               style: Theme.of(context).textTheme.titleMedium,
                             ),
                           ),
+                          // FIX: botón no “encima” -> si no entra, que se achique
                           if (widget.embebido)
-                            FilledButton.icon(
-                              onPressed: _agregarComponente,
-                              icon: const Icon(Icons.add),
-                              label: const Text('Agregar'),
+                            Flexible(
+                              child: Align(
+                                alignment: Alignment.centerRight,
+                                child: FilledButton.icon(
+                                  onPressed: _agregarComponente,
+                                  icon: const Icon(Icons.add),
+                                  label: const Text('Agregar'),
+                                ),
+                              ),
                             ),
                         ],
                       ),
                       const SizedBox(height: 8),
+
                       Expanded(
                         child: componentes.isEmpty
                             ? const Center(child: Text('Agregá productos al combo'))
@@ -509,7 +541,6 @@ class _ComboEditorPantallaState extends State<ComboEditorPantalla> {
       appBar: AppBar(
         title: const Text('Editar combo'),
         actions: [
-          // el título real lo muestra el FutureBuilder en body, pero dejamos acciones acá
           IconButton(
             onPressed: () => setState(() {}),
             icon: const Icon(Icons.refresh),

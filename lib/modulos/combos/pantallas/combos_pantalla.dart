@@ -1,3 +1,4 @@
+// lib/modulos/combos/pantallas/combos_pantalla.dart
 import 'package:flutter/material.dart';
 import 'package:gestion_de_stock/aplicacion/utiles/formatos.dart';
 import 'package:gestion_de_stock/infraestructura/dep_inyeccion/proveedores.dart';
@@ -91,8 +92,6 @@ class _CombosPantallaState extends State<CombosPantalla> {
     final id = await _controlador.crearComboRapido(nombre: nombre, precioVenta: precio);
     if (!mounted || id == null) return;
 
-    // en tablet: lo seleccionamos y abrimos editor a la derecha
-    // en móvil: navegamos normal
     final ancha = MediaQuery.of(context).size.width >= 900;
     if (ancha) {
       setState(() {
@@ -125,6 +124,30 @@ class _CombosPantallaState extends State<CombosPantalla> {
 
     if (cap == null || cap.isInfinite || cap.isNaN) return 0;
     return cap.floorToDouble();
+  }
+
+  Widget _subtitleCombo(Combo cb, double cap) {
+    final cs = Theme.of(context).colorScheme;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Precio: ${Formatos.dinero(_moneda, cb.precioVenta)}',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        const SizedBox(height: 2),
+        Text(
+          'Podés armar: ${cap.toStringAsFixed(0)}',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: cs.onSurfaceVariant,
+          ),
+        ),
+      ],
+    );
   }
 
   @override
@@ -218,17 +241,16 @@ class _CombosPantallaState extends State<CombosPantalla> {
                                     )
                                         : null,
                                     child: ListTile(
+                                      isThreeLine: true,
                                       title: Text(
                                         cb.activo ? cb.nombre : '${cb.nombre} (INACTIVO)',
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                       ),
-                                      subtitle: Text(
-                                        'Precio: ${Formatos.dinero(_moneda, cb.precioVenta)}  •  Podés armar: ${cap.toStringAsFixed(0)}',
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
+                                      subtitle: _subtitleCombo(cb, cap),
+                                      trailing: Icon(
+                                        ancha ? Icons.chevron_right : Icons.open_in_new,
                                       ),
-                                      trailing: Icon(ancha ? Icons.chevron_right : Icons.open_in_new),
                                     ),
                                   ),
                                 ),

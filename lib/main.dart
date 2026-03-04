@@ -7,9 +7,7 @@ import 'infraestructura/servicios/restart_widget.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
   await RespaldoLocal.restaurarSiHaceFalta();
-
   runApp(const RestartWidget(child: Aplicacion()));
 }
 
@@ -21,7 +19,7 @@ class Aplicacion extends StatelessWidget {
     return MaterialApp(
       title: 'Control de mercadería',
       debugShowCheckedModeBanner: false,
-      theme: temaAplicacion(),
+      theme: temaSuiteClaro(),
       initialRoute: Rutas.inicio,
       routes: rutasAplicacion(),
     );

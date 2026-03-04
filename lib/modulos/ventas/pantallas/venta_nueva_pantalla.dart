@@ -1,3 +1,4 @@
+// lib/modulos/ventas/pantallas/venta_nueva_pantalla.dart
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -16,6 +17,9 @@ class VentaNuevaPantalla extends StatefulWidget {
 }
 
 class _VentaNuevaPantallaState extends State<VentaNuevaPantalla> {
+  static const double _kTablet = 900;
+  static const double _kMaxAnchoTablet = 620;
+
   int _modo = 0; // 0: combo, 1: productos
   String _moneda = r'$';
 
@@ -25,6 +29,12 @@ class _VentaNuevaPantallaState extends State<VentaNuevaPantalla> {
 
   final _cantidadCtrl = TextEditingController(text: '1');
   final _notaCtrl = TextEditingController();
+
+  // cliente, medio de pago, envío
+  final _clienteCtrl = TextEditingController();
+  bool _cobraEnvio = false;
+  final _envioCtrl = TextEditingController(text: '0');
+  String _medioPago = 'Efectivo';
 
   bool _guardando = false;
   String? _error;
@@ -37,6 +47,12 @@ class _VentaNuevaPantallaState extends State<VentaNuevaPantalla> {
     super.initState();
     _precargarNota();
     _cargarMoneda();
+    _envioCtrl.addListener(_onEnvioChanged);
+  }
+
+  void _onEnvioChanged() {
+    if (!mounted) return;
+    if (_cobraEnvio) setState(() {});
   }
 
   Future<void> _cargarMoneda() async {
@@ -54,8 +70,12 @@ class _VentaNuevaPantallaState extends State<VentaNuevaPantalla> {
 
   @override
   void dispose() {
+    _envioCtrl.removeListener(_onEnvioChanged);
+
     _cantidadCtrl.dispose();
     _notaCtrl.dispose();
+    _clienteCtrl.dispose();
+    _envioCtrl.dispose();
     super.dispose();
   }
 
@@ -72,6 +92,12 @@ class _VentaNuevaPantallaState extends State<VentaNuevaPantalla> {
       t += l.cantidad * l.precioUnitario;
     }
     return t;
+  }
+
+  double get _montoEnvio {
+    if (!_cobraEnvio) return 0.0;
+    final v = _num(_envioCtrl.text);
+    return v < 0 ? 0.0 : v;
   }
 
   Widget _miniaturaProductoPorRuta(String? ruta) {
@@ -301,16 +327,27 @@ class _VentaNuevaPantallaState extends State<VentaNuevaPantalla> {
     required double costoCombo,
     required double costoTotal,
     required double margenTotal,
+    required String? cliente,
+    required String medioPago,
+    required double envio,
   }) {
-    final base = (notaUsuario ?? '').trim();
+    final baseUsuario = (notaUsuario ?? '').trim();
+
+    final meta = <String>[
+      if ((cliente ?? '').trim().isNotEmpty) 'Cliente: ${cliente!.trim()}',
+      'Pago: $medioPago',
+      if (envio > 0) 'Envío: ${Formatos.dinero(_moneda, envio)}',
+    ].join(' • ');
 
     final extra =
         'Costo estimado combo: ${Formatos.dinero(_moneda, costoCombo)}; '
         'Costo estimado total: ${Formatos.dinero(_moneda, costoTotal)}; '
         'Margen estimado: ${Formatos.dinero(_moneda, margenTotal)}';
 
-    if (base.isEmpty) return extra;
-    return '$base\n$extra';
+    if (baseUsuario.isEmpty) {
+      return meta.isEmpty ? extra : '$meta\n$extra';
+    }
+    return meta.isEmpty ? '$baseUsuario\n$extra' : '$meta\n$baseUsuario\n$extra';
   }
 
   Future<void> _agregarProductoALaVenta() async {
@@ -562,6 +599,14 @@ class _VentaNuevaPantallaState extends State<VentaNuevaPantalla> {
 
   Future<void> _confirmarVenta() async {
     setState(() => _error = null);
+
+    final cliente = _clienteCtrl.text.trim();
+    final envio = _montoEnvio;
+    if (_cobraEnvio && envio <= 0) {
+      setState(() => _error = 'El envío está activado, cargá un monto válido');
+      return;
+    }
+
     setState(() => _guardando = true);
 
     try {
@@ -622,17 +667,21 @@ class _VentaNuevaPantallaState extends State<VentaNuevaPantalla> {
         return;
       }
 
-      final total = combo.precioVenta * cantidadCombos;
+      final subtotal = combo.precioVenta * cantidadCombos;
+      final total = subtotal + envio;
 
       final costoCombo = await _costoEstimadoPorCombo(comboId);
       final costoTotal = costoCombo * cantidadCombos;
-      final margenTotal = total - costoTotal;
+      final margenTotal = subtotal - costoTotal;
 
       var notaFinal = _armarNotaFinal(
         notaUsuario: _notaCtrl.text.trim().isEmpty ? null : _notaCtrl.text.trim(),
         costoCombo: costoCombo,
         costoTotal: costoTotal,
         margenTotal: margenTotal,
+        cliente: cliente.isEmpty ? null : cliente,
+        medioPago: _medioPago,
+        envio: envio,
       );
 
       if (_modo == 1) {
@@ -677,194 +726,296 @@ class _VentaNuevaPantallaState extends State<VentaNuevaPantalla> {
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Nueva venta')),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: EdgeInsets.fromLTRB(
-            12,
-            12,
-            12,
-            12 + MediaQuery.of(context).viewInsets.bottom,
-          ),
-          child: Column(
-            children: [
-              SegmentedButton<int>(
-                segments: const [
-                  ButtonSegment(value: 0, label: Text('Combo')),
-                  ButtonSegment(value: 1, label: Text('Productos')),
-                ],
-                selected: {_modo},
-                onSelectionChanged: _guardando
-                    ? null
-                    : (s) {
-                  setState(() {
-                    _modo = s.first;
-                    _error = null;
-                    _capacidad = null;
-                    _calculandoCapacidad = false;
-                  });
-                },
+  Widget _seccionDatosVenta() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          children: [
+            TextField(
+              controller: _clienteCtrl,
+              enabled: !_guardando,
+              decoration: const InputDecoration(
+                labelText: 'Cliente (opcional)',
               ),
-              const SizedBox(height: 12),
-              if (_modo == 0) ...[
-                FutureBuilder<List<Combo>>(
-                  future: _cargarCombos(),
-                  builder: (context, snap) {
-                    if (snap.connectionState != ConnectionState.done) {
-                      return const LinearProgressIndicator();
-                    }
-                    final combos = snap.data ?? [];
-                    if (combos.isEmpty) return const Text('Primero creá un combo');
+              textInputAction: TextInputAction.next,
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String>(
+              value: _medioPago,
+              items: const [
+                DropdownMenuItem(value: 'Efectivo', child: Text('Efectivo')),
+                DropdownMenuItem(value: 'Tarjeta', child: Text('Tarjeta')),
+                DropdownMenuItem(value: 'Transferencia', child: Text('Transferencia')),
+              ],
+              onChanged: _guardando
+                  ? null
+                  : (v) {
+                setState(() => _medioPago = v ?? 'Efectivo');
+              },
+              decoration: const InputDecoration(labelText: 'Medio de pago'),
+            ),
+            const SizedBox(height: 12),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Cobrar envío'),
+              value: _cobraEnvio,
+              onChanged: _guardando
+                  ? null
+                  : (v) {
+                setState(() {
+                  _cobraEnvio = v;
 
-                    return Column(
-                      children: [
-                        DropdownButtonFormField<int>(
-                          initialValue: _comboId,
-                          isExpanded: true,
-                          items: combos
-                              .map(
-                                (c) => DropdownMenuItem<int>(
-                              value: c.id,
-                              child: Text(
-                                '${c.nombre} (${Formatos.dinero(_moneda, c.precioVenta)})',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          )
-                              .toList(),
-                          selectedItemBuilder: (context) {
-                            return combos.map((c) {
-                              return Align(
-                                alignment: Alignment.centerLeft,
-                                child: Text(
-                                  '${c.nombre} (${Formatos.dinero(_moneda, c.precioVenta)})',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              );
-                            }).toList();
-                          },
-                          onChanged: _guardando
-                              ? null
-                              : (id) {
-                            setState(() => _comboId = id);
-                            _recalcularCapacidad(id);
-                          },
-                          decoration: const InputDecoration(labelText: 'Combo'),
+                  if (!_cobraEnvio) {
+                    _envioCtrl.text = '0';
+                  } else {
+                    if (_envioCtrl.text.trim() == '0') _envioCtrl.clear();
+                  }
+                });
+              },
+            ),
+            if (_cobraEnvio) ...[
+              const SizedBox(height: 12),
+              TextField(
+                controller: _envioCtrl,
+                enabled: !_guardando,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                decoration: InputDecoration(labelText: 'Monto envío ($_moneda)'),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _contenido(BuildContext context, {required bool esTablet}) {
+    final envio = _montoEnvio;
+
+    final inner = SingleChildScrollView(
+      padding: EdgeInsets.fromLTRB(
+        12,
+        12,
+        12,
+        12 + MediaQuery.of(context).viewInsets.bottom,
+      ),
+      child: Column(
+        children: [
+          _seccionDatosVenta(),
+          const SizedBox(height: 12),
+          SegmentedButton<int>(
+            segments: const [
+              ButtonSegment(value: 0, label: Text('Combo')),
+              ButtonSegment(value: 1, label: Text('Productos')),
+            ],
+            selected: {_modo},
+            onSelectionChanged: _guardando
+                ? null
+                : (s) {
+              setState(() {
+                _modo = s.first;
+                _error = null;
+                _capacidad = null;
+                _calculandoCapacidad = false;
+              });
+            },
+          ),
+          const SizedBox(height: 12),
+          if (_modo == 0) ...[
+            FutureBuilder<List<Combo>>(
+              future: _cargarCombos(),
+              builder: (context, snap) {
+                if (snap.connectionState != ConnectionState.done) {
+                  return const LinearProgressIndicator();
+                }
+                final combos = snap.data ?? [];
+                if (combos.isEmpty) return const Text('Primero creá un combo');
+
+                return Column(
+                  children: [
+                    DropdownButtonFormField<int>(
+                      initialValue: _comboId,
+                      isExpanded: true,
+                      items: combos
+                          .map(
+                            (c) => DropdownMenuItem<int>(
+                          value: c.id,
+                          child: Text(
+                            '${c.nombre} (${Formatos.dinero(_moneda, c.precioVenta)})',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
-                        const SizedBox(height: 8),
-                        if (_calculandoCapacidad)
-                          const Align(
-                            alignment: Alignment.centerLeft,
-                            child: Text('Calculando capacidad...'),
-                          )
-                        else if (_capacidad != null && _comboId != null)
-                          Align(
+                      )
+                          .toList(),
+                      selectedItemBuilder: (context) {
+                        return combos.map((c) {
+                          return Align(
                             alignment: Alignment.centerLeft,
                             child: Text(
-                              'Podés vender hasta: ${_capacidad!.toStringAsFixed(0)} combos',
+                              '${c.nombre} (${Formatos.dinero(_moneda, c.precioVenta)})',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
-                          ),
-                      ],
-                    );
-                  },
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _cantidadCtrl,
-                  enabled: !_guardando,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(labelText: 'Cantidad de combos'),
-                ),
-              ] else ...[
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton.icon(
-                    onPressed: _guardando ? null : _agregarProductoALaVenta,
-                    icon: const Icon(Icons.add),
-                    label: const Text('Agregar producto'),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                if (_lineas.isEmpty)
-                  const Text('Agregá productos para armar la venta')
-                else
-                  ListView.separated(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: _lineas.length,
-                    separatorBuilder: (context, index) => const SizedBox(height: 8),
-                    itemBuilder: (context, i) {
-                      final l = _lineas[i];
-                      final sub = l.cantidad * l.precioUnitario;
-
-                      return Card(
-                        child: ListTile(
-                          leading: _miniaturaProductoPorRuta(l.imagen),
-                          title: Text(
-                            l.nombre,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          subtitle: Text(
-                            'Cant: ${l.cantidad.toStringAsFixed(2)} ${l.unidad}  •  '
-                                'PU: ${Formatos.dinero(_moneda, l.precioUnitario)}',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          trailing: Text(Formatos.dinero(_moneda, sub)),
-                          onTap: _guardando ? null : () => _editarLineaProducto(i),
-                          onLongPress: _guardando
-                              ? null
-                              : () {
-                            setState(() => _lineas.removeAt(i));
-                          },
+                          );
+                        }).toList();
+                      },
+                      onChanged: _guardando
+                          ? null
+                          : (id) {
+                        setState(() => _comboId = id);
+                        _recalcularCapacidad(id);
+                      },
+                      decoration: const InputDecoration(labelText: 'Combo'),
+                    ),
+                    const SizedBox(height: 8),
+                    if (_calculandoCapacidad)
+                      const Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text('Calculando capacidad...'),
+                      )
+                    else if (_capacidad != null && _comboId != null)
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          'Podés vender hasta: ${_capacidad!.toStringAsFixed(0)} combos',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                      );
-                    },
-                  ),
-                const SizedBox(height: 8),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text('Total: ${Formatos.dinero(_moneda, _totalProductos)}'),
-                ),
-                const SizedBox(height: 4),
-                const Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text('Tip: mantené apretado un producto para quitarlo'),
-                ),
-              ],
-              const SizedBox(height: 12),
-              TextField(
-                controller: _notaCtrl,
-                enabled: !_guardando,
-                decoration: const InputDecoration(labelText: 'Nota (opcional)'),
+                      ),
+                  ],
+                );
+              },
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _cantidadCtrl,
+              enabled: !_guardando,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(labelText: 'Cantidad de combos'),
+            ),
+          ] else ...[
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: _guardando ? null : _agregarProductoALaVenta,
+                icon: const Icon(Icons.add),
+                label: const Text('Agregar producto'),
               ),
-              const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  onPressed: _guardando ? null : _confirmarVenta,
-                  child: Text(_guardando ? 'Guardando...' : 'Confirmar'),
-                ),
+            ),
+            const SizedBox(height: 12),
+            if (_lineas.isEmpty)
+              const Text('Agregá productos para armar la venta')
+            else
+              ListView.separated(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: _lineas.length,
+                separatorBuilder: (context, index) => const SizedBox(height: 8),
+                itemBuilder: (context, i) {
+                  final l = _lineas[i];
+                  final sub = l.cantidad * l.precioUnitario;
+
+                  return Card(
+                    child: ListTile(
+                      leading: _miniaturaProductoPorRuta(l.imagen),
+                      title: Text(
+                        l.nombre,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      subtitle: Text(
+                        'Cant: ${l.cantidad.toStringAsFixed(2)} ${l.unidad}  •  '
+                            'PU: ${Formatos.dinero(_moneda, l.precioUnitario)}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      trailing: Text(Formatos.dinero(_moneda, sub)),
+                      onTap: _guardando ? null : () => _editarLineaProducto(i),
+                      onLongPress: _guardando
+                          ? null
+                          : () {
+                        setState(() => _lineas.removeAt(i));
+                      },
+                    ),
+                  );
+                },
               ),
-              if (_error != null) ...[
-                const SizedBox(height: 12),
-                Text(
-                  _error!,
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
-                ),
-              ],
-            ],
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text('Subtotal: ${Formatos.dinero(_moneda, _totalProductos)}'),
+            ),
+            const SizedBox(height: 4),
+            const Align(
+              alignment: Alignment.centerLeft,
+              child: Text('Tip: mantené apretado un producto para quitarlo'),
+            ),
+          ],
+          const SizedBox(height: 12),
+          TextField(
+            controller: _notaCtrl,
+            enabled: !_guardando,
+            decoration: const InputDecoration(labelText: 'Nota (opcional)'),
           ),
-        ),
+          const SizedBox(height: 12),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              envio > 0 ? 'Envío: ${Formatos.dinero(_moneda, envio)}' : 'Envío: -',
+            ),
+          ),
+          const SizedBox(height: 4),
+          if (_modo == 1)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Total estimado: ${Formatos.dinero(_moneda, _totalProductos + envio)}',
+              ),
+            ),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              onPressed: _guardando ? null : _confirmarVenta,
+              child: Text(_guardando ? 'Guardando...' : 'Confirmar'),
+            ),
+          ),
+          if (_error != null) ...[
+            const SizedBox(height: 12),
+            Text(
+              _error!,
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
+          ],
+        ],
       ),
+    );
+
+    if (!esTablet) return inner;
+
+    return Align(
+      alignment: Alignment.topCenter,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: _kMaxAnchoTablet),
+        child: inner,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, c) {
+        final esTablet = c.maxWidth >= _kTablet;
+
+        return Scaffold(
+          appBar: AppBar(title: const Text('Nueva venta')),
+          body: SafeArea(
+            child: _contenido(context, esTablet: esTablet),
+          ),
+        );
+      },
     );
   }
 }

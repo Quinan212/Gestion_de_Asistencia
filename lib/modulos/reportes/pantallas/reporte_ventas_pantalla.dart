@@ -1,3 +1,4 @@
+// lib/modulos/reportes/pantallas/reporte_ventas_pantalla.dart
 import 'package:flutter/material.dart';
 
 import 'package:gestion_de_stock/aplicacion/utiles/formatos.dart';
@@ -20,11 +21,14 @@ class ReporteVentasPantalla extends StatefulWidget {
 class _ReporteVentasPantallaState extends State<ReporteVentasPantalla> {
   static const double _kTablet = 900;
 
+  // ancho máximo cómodo (como venís usando en otras pantallas)
+  static const double _kMaxPageWidth = 1120;
+
   late final ReportesControlador _c;
   int _modo = 0; // 0: ventas por día, 1: consumo neto
   String _moneda = r'$';
 
-  // tablet: día seleccionado
+  // tablet: día seleccionado (ISO yyyy-mm-dd)
   String? _isoSeleccionado;
 
   @override
@@ -133,59 +137,64 @@ class _ReporteVentasPantallaState extends State<ReporteVentasPantalla> {
           }
         }
 
-        return Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            children: [
-              Row(
+        return Align(
+          alignment: Alignment.topCenter,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: _kMaxPageWidth),
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
                 children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: SegmentedButton<int>(
+                          segments: const [
+                            ButtonSegment(value: 0, label: Text('Ventas por día')),
+                            ButtonSegment(value: 1, label: Text('Consumo neto')),
+                          ],
+                          selected: {_modo},
+                          onSelectionChanged: (s) {
+                            setState(() {
+                              _modo = s.first;
+                              if (_modo == 0 && _isoSeleccionado == null && _c.ventasDia.isNotEmpty) {
+                                _isoSeleccionado = _c.ventasDia.first['fecha'] as String;
+                              }
+                            });
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      IconButton(
+                        onPressed: _exportar,
+                        icon: const Icon(Icons.download_outlined),
+                        tooltip: 'Exportar CSV',
+                      ),
+                      IconButton(
+                        onPressed: _c.cargarTodo,
+                        icon: const Icon(Icons.refresh),
+                        tooltip: 'Refrescar',
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
                   Expanded(
-                    child: SegmentedButton<int>(
-                      segments: const [
-                        ButtonSegment(value: 0, label: Text('Ventas por día')),
-                        ButtonSegment(value: 1, label: Text('Consumo neto')),
-                      ],
-                      selected: {_modo},
-                      onSelectionChanged: (s) {
-                        setState(() {
-                          _modo = s.first;
-                          // si volvemos a ventas por día, aseguramos selección
-                          if (_modo == 0 && _isoSeleccionado == null && _c.ventasDia.isNotEmpty) {
-                            _isoSeleccionado = _c.ventasDia.first['fecha'] as String;
-                          }
-                        });
+                    child: LayoutBuilder(
+                      builder: (context, c) {
+                        final esTablet = c.maxWidth >= _kTablet;
+
+                        if (_modo == 0) {
+                          if (!esTablet) return _vistaVentasMovil();
+                          return _vistaVentasTablet();
+                        }
+
+                        return _vistaConsumo();
                       },
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  IconButton(
-                    onPressed: _exportar,
-                    icon: const Icon(Icons.download_outlined),
-                    tooltip: 'Exportar CSV',
-                  ),
-                  IconButton(
-                    onPressed: _c.cargarTodo,
-                    icon: const Icon(Icons.refresh),
-                    tooltip: 'Refrescar',
-                  ),
                 ],
               ),
-              const SizedBox(height: 12),
-              Expanded(
-                child: LayoutBuilder(
-                  builder: (context, c) {
-                    final esTablet = c.maxWidth >= _kTablet;
-
-                    if (_modo == 0) {
-                      if (!esTablet) return _vistaVentasMovil();
-                      return _vistaVentasTablet();
-                    }
-
-                    return _vistaConsumo();
-                  },
-                ),
-              ),
-            ],
+            ),
           ),
         );
       },
@@ -224,17 +233,19 @@ class _ReporteVentasPantallaState extends State<ReporteVentasPantalla> {
     final datos = _c.ventasDia;
     if (datos.isEmpty) return const Center(child: Text('Sin datos'));
 
-    return ListView.separated(
-      itemCount: datos.length,
-      separatorBuilder: (context, index) => const SizedBox(height: 8),
-      itemBuilder: (context, i) {
-        final fila = datos[i];
-        final iso = fila['fecha'] as String;
-        final fecha = _bonitoFecha(iso);
-        final total = (fila['total'] as double);
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: ListView.separated(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        itemCount: datos.length,
+        separatorBuilder: (_, __) => const Divider(height: 1),
+        itemBuilder: (context, i) {
+          final fila = datos[i];
+          final iso = fila['fecha'] as String;
+          final fecha = _bonitoFecha(iso);
+          final total = (fila['total'] as double);
 
-        return Card(
-          child: ListTile(
+          return ListTile(
             title: Text(fecha),
             subtitle: const Text('Tocá para ver ventas del día'),
             trailing: Text(Formatos.dinero(_moneda, total)),
@@ -251,9 +262,9 @@ class _ReporteVentasPantallaState extends State<ReporteVentasPantalla> {
                 ),
               );
             },
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 
@@ -271,25 +282,48 @@ class _ReporteVentasPantallaState extends State<ReporteVentasPantalla> {
       children: [
         SizedBox(
           width: 360,
-          child: ListView.separated(
-            itemCount: datos.length,
-            separatorBuilder: (context, index) => const SizedBox(height: 8),
-            itemBuilder: (context, i) {
-              final fila = datos[i];
-              final iso = fila['fecha'] as String;
-              final total = (fila['total'] as double);
-              final seleccionado = iso == isoSel;
+          child: Card(
+            clipBehavior: Clip.antiAlias,
+            child: ListView.separated(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              itemCount: datos.length,
+              separatorBuilder: (_, __) => const Divider(height: 1),
+              itemBuilder: (context, i) {
+                final fila = datos[i];
+                final iso = fila['fecha'] as String;
+                final total = (fila['total'] as double);
+                final seleccionado = iso == isoSel;
 
-              return Card(
-                child: ListTile(
-                  selected: seleccionado,
-                  title: Text(_bonitoFecha(iso)),
-                  trailing: Text(Formatos.dinero(_moneda, total)),
-                  subtitle: const Text('Ver detalle'),
+                return InkWell(
                   onTap: () => setState(() => _isoSeleccionado = iso),
-                ),
-              );
-            },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                    color: seleccionado ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.08) : null,
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            _bonitoFecha(iso),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          Formatos.dinero(_moneda, total),
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
           ),
         ),
         const SizedBox(width: 12),
@@ -310,20 +344,22 @@ class _ReporteVentasPantallaState extends State<ReporteVentasPantalla> {
     final datos = _c.consumo;
     if (datos.isEmpty) return const Center(child: Text('Sin consumo registrado'));
 
-    return ListView.separated(
-      itemCount: datos.length,
-      separatorBuilder: (context, index) => const SizedBox(height: 8),
-      itemBuilder: (context, i) {
-        final fila = datos[i];
-        final productoId = fila['productoId'] as int;
-        final nombre = fila['nombre'] as String;
-        final unidad = fila['unidad'] as String;
-        final cantidad = fila['cantidad'] as double;
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: ListView.separated(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        itemCount: datos.length,
+        separatorBuilder: (_, __) => const Divider(height: 1),
+        itemBuilder: (context, i) {
+          final fila = datos[i];
+          final productoId = fila['productoId'] as int;
+          final nombre = fila['nombre'] as String;
+          final unidad = fila['unidad'] as String;
+          final cantidad = fila['cantidad'] as double;
 
-        final txt = '${cantidad >= 0 ? '+' : '-'}${cantidad.abs().toStringAsFixed(2)} $unidad';
+          final txt = '${cantidad >= 0 ? '+' : '-'}${cantidad.abs().toStringAsFixed(2)} $unidad';
 
-        return Card(
-          child: ListTile(
+          return ListTile(
             title: Text(
               nombre,
               maxLines: 1,
@@ -343,15 +379,17 @@ class _ReporteVentasPantallaState extends State<ReporteVentasPantalla> {
                 ),
               );
             },
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 }
 
 // -------------------
-// Pantalla del día (móvil)
+// Pantalla del día (móvil/tablet)
+// - móvil: lista y navega al detalle al tocar
+// - tablet: lista izq + detalle der (sin navegar)
 // -------------------
 class _VentasDelDiaPantalla extends StatelessWidget {
   final DateTime fecha;
@@ -361,6 +399,8 @@ class _VentasDelDiaPantalla extends StatelessWidget {
     required this.fecha,
     required this.moneda,
   });
+
+  static const double _kMaxPageWidth = 1120;
 
   String _fechaCorta(DateTime f) {
     String d2(int n) => n.toString().padLeft(2, '0');
@@ -373,21 +413,24 @@ class _VentasDelDiaPantalla extends StatelessWidget {
       appBar: AppBar(
         title: Text('Ventas ${_fechaCorta(fecha)}'),
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(12),
-        child: _VentasDelDiaPanel(
-          fecha: fecha,
-          moneda: moneda,
+      body: Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: _kMaxPageWidth),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: _VentasDelDiaPanel(
+              fecha: fecha,
+              moneda: moneda,
+            ),
+          ),
         ),
       ),
     );
   }
 }
 
-// -------------------
-// Panel reutilizable del día (tablet y móvil)
-// -------------------
-class _VentasDelDiaPanel extends StatelessWidget {
+class _VentasDelDiaPanel extends StatefulWidget {
   final DateTime fecha;
   final String moneda;
 
@@ -395,6 +438,16 @@ class _VentasDelDiaPanel extends StatelessWidget {
     required this.fecha,
     required this.moneda,
   });
+
+  @override
+  State<_VentasDelDiaPanel> createState() => _VentasDelDiaPanelState();
+}
+
+class _VentasDelDiaPanelState extends State<_VentasDelDiaPanel> {
+  static const double _kTablet = 900;
+  static const double _kDetailWidth = 540;
+
+  int? _ventaSel;
 
   String _fechaCorta(DateTime f) {
     String d2(int n) => n.toString().padLeft(2, '0');
@@ -410,6 +463,72 @@ class _VentasDelDiaPanel extends StatelessWidget {
     return a.year == b.year && a.month == b.month && a.day == b.day;
   }
 
+  Widget _filaVenta({
+    required bool esTablet,
+    required Venta v,
+    required bool seleccionada,
+  }) {
+    final cs = Theme.of(context).colorScheme;
+    final cancelada = (v.nota ?? '').contains('VENTA CANCELADA');
+
+    return InkWell(
+      onTap: () {
+        if (esTablet) {
+          setState(() => _ventaSel = v.id);
+          return;
+        }
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => VentaDetallePantalla(ventaId: v.id)),
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        color: seleccionada ? cs.primary.withValues(alpha: 0.08) : null,
+        child: Row(
+          children: [
+            CircleAvatar(
+              radius: 22,
+              backgroundColor: cs.surfaceContainerHighest,
+              child: Icon(
+                cancelada ? Icons.block : Icons.receipt_long_outlined,
+                color: cs.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    Formatos.dinero(widget.moneda, v.total),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      color: cancelada ? cs.onSurfaceVariant : null,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    _fechaHora(v.fecha),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: cs.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            Icon(Icons.chevron_right, color: cs.onSurfaceVariant),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<List<Venta>>(
@@ -420,11 +539,17 @@ class _VentasDelDiaPanel extends StatelessWidget {
         }
 
         final todas = snap.data ?? [];
-        final delDia = todas.where((v) => _esMismoDia(v.fecha, fecha)).toList()
+        final delDia = todas.where((v) => _esMismoDia(v.fecha, widget.fecha)).toList()
           ..sort((a, b) => b.fecha.compareTo(a.fecha));
 
         if (delDia.isEmpty) {
-          return Center(child: Text('No hay ventas el ${_fechaCorta(fecha)}'));
+          return Center(child: Text('No hay ventas el ${_fechaCorta(widget.fecha)}'));
+        }
+
+        if (_ventaSel == null) {
+          _ventaSel = delDia.first.id;
+        } else if (!delDia.any((x) => x.id == _ventaSel)) {
+          _ventaSel = delDia.first.id;
         }
 
         double totalDia = 0;
@@ -432,46 +557,98 @@ class _VentasDelDiaPanel extends StatelessWidget {
           totalDia += v.total;
         }
 
-        return Column(
-          children: [
-            Card(
-              child: ListTile(
-                title: Text('Total del día (${_fechaCorta(fecha)})'),
-                trailing: Text(Formatos.dinero(moneda, totalDia)),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Expanded(
-              child: ListView.separated(
-                itemCount: delDia.length,
-                separatorBuilder: (context, index) => const SizedBox(height: 8),
-                itemBuilder: (context, i) {
-                  final v = delDia[i];
-                  final cancelada = (v.nota ?? '').contains('VENTA CANCELADA');
+        return LayoutBuilder(
+          builder: (context, c) {
+            final esTablet = c.maxWidth >= _kTablet;
 
-                  return Card(
-                    child: ListTile(
-                      title: Text(
-                        'Total: ${Formatos.dinero(moneda, v.total)}${cancelada ? ' (CANCELADA)' : ''}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+            Widget header() {
+              return Card(
+                clipBehavior: Clip.antiAlias,
+                child: ListTile(
+                  leading: const Icon(Icons.calendar_month_outlined),
+                  title: Text('Total del día (${_fechaCorta(widget.fecha)})'),
+                  trailing: Text(Formatos.dinero(widget.moneda, totalDia)),
+                ),
+              );
+            }
+
+            if (!esTablet) {
+              return Column(
+                children: [
+                  header(),
+                  const SizedBox(height: 8),
+                  Expanded(
+                    child: Card(
+                      clipBehavior: Clip.antiAlias,
+                      child: ListView.separated(
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        itemCount: delDia.length,
+                        separatorBuilder: (_, __) => const Divider(height: 1),
+                        itemBuilder: (context, i) {
+                          final v = delDia[i];
+                          return _filaVenta(
+                            esTablet: false,
+                            v: v,
+                            seleccionada: false,
+                          );
+                        },
                       ),
-                      subtitle: Text(_fechaHora(v.fecha)),
-                      trailing: const Icon(Icons.chevron_right),
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => VentaDetallePantalla(ventaId: v.id),
-                          ),
-                        );
-                      },
                     ),
-                  );
-                },
-              ),
-            ),
-          ],
+                  ),
+                ],
+              );
+            }
+
+            return Column(
+              children: [
+                header(),
+                const SizedBox(height: 8),
+                Expanded(
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Card(
+                          clipBehavior: Clip.antiAlias,
+                          child: ListView.separated(
+                            padding: const EdgeInsets.symmetric(vertical: 6),
+                            itemCount: delDia.length,
+                            separatorBuilder: (_, __) => const Divider(height: 1),
+                            itemBuilder: (context, i) {
+                              final v = delDia[i];
+                              final sel = v.id == _ventaSel;
+
+                              return _filaVenta(
+                                esTablet: true,
+                                v: v,
+                                seleccionada: sel,
+                              );
+                            },
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      SizedBox(
+                        width: _kDetailWidth,
+                        child: Card(
+                          clipBehavior: Clip.antiAlias,
+                          child: Padding(
+                            padding: const EdgeInsets.all(12),
+                            child: _ventaSel == null
+                                ? const Center(child: Text('Elegí una venta'))
+                                : VentaDetallePantalla(
+                              ventaId: _ventaSel!,
+                              embebido: true,
+                              alCambiarAlgo: () => setState(() {}),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            );
+          },
         );
       },
     );
@@ -499,9 +676,7 @@ class _MovimientosProductoDesdeReportePantalla extends StatelessWidget {
     final nota = (m.nota ?? '');
 
     if (nota.contains('CANCELADO')) return 'Cancelado';
-    if (ref.startsWith('reversion_de:') || nota.contains('REVERSIÓN (AUTO)')) {
-      return 'Cancelación';
-    }
+    if (ref.startsWith('reversion_de:') || nota.contains('REVERSIÓN (AUTO)')) return 'Cancelación';
     if (ref.startsWith('venta:')) return 'Venta';
     if (ref.startsWith('compra:')) return 'Compra';
     return 'Manual';
@@ -529,59 +704,67 @@ class _MovimientosProductoDesdeReportePantalla extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
         ),
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(12),
-        child: FutureBuilder<List<Movimiento>>(
-          future: Proveedores.inventarioRepositorio.listarMovimientosDeProducto(productoId),
-          builder: (context, snap) {
-            if (snap.connectionState != ConnectionState.done) {
-              return const Center(child: CircularProgressIndicator());
-            }
+      body: Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 1120),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: FutureBuilder<List<Movimiento>>(
+              future: Proveedores.inventarioRepositorio.listarMovimientosDeProducto(productoId),
+              builder: (context, snap) {
+                if (snap.connectionState != ConnectionState.done) {
+                  return const Center(child: CircularProgressIndicator());
+                }
 
-            final movs = snap.data ?? [];
-            if (movs.isEmpty) {
-              return const Center(child: Text('No hay movimientos'));
-            }
-
-            return ListView.separated(
-              itemCount: movs.length,
-              separatorBuilder: (context, index) => const SizedBox(height: 8),
-              itemBuilder: (context, i) {
-                final m = movs[i];
-
-                final origen = _origen(m);
-                final detalle = _detalleOrigen(m);
-
-                final v = _cantidadConSigno(m);
-                final txt = '${v >= 0 ? '+' : '-'}${v.abs().toStringAsFixed(2)} $unidad';
-
-                final cancelado = (m.nota ?? '').contains('CANCELADO');
+                final movs = snap.data ?? [];
+                if (movs.isEmpty) {
+                  return const Center(child: Text('No hay movimientos'));
+                }
 
                 return Card(
-                  child: ListTile(
-                    title: Text(
-                      origen,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    subtitle: Text(
-                      '${_fecha(m.fecha)}\n'
-                          'Tipo: ${m.tipo}  •  Ref: $detalle\n'
-                          '${m.nota ?? ''}',
-                      maxLines: 3,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    trailing: Text(
-                      txt,
-                      style: TextStyle(
-                        color: cancelado ? Theme.of(context).disabledColor : null,
-                      ),
-                    ),
+                  clipBehavior: Clip.antiAlias,
+                  child: ListView.separated(
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    itemCount: movs.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder: (context, i) {
+                      final m = movs[i];
+
+                      final origen = _origen(m);
+                      final detalle = _detalleOrigen(m);
+
+                      final v = _cantidadConSigno(m);
+                      final txt = '${v >= 0 ? '+' : '-'}${v.abs().toStringAsFixed(2)} $unidad';
+
+                      final cancelado = (m.nota ?? '').contains('CANCELADO');
+
+                      return ListTile(
+                        title: Text(
+                          origen,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        subtitle: Text(
+                          '${_fecha(m.fecha)}\n'
+                              'Tipo: ${m.tipo}  •  Ref: $detalle\n'
+                              '${m.nota ?? ''}',
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        trailing: Text(
+                          txt,
+                          style: TextStyle(
+                            color: cancelado ? Theme.of(context).disabledColor : null,
+                          ),
+                        ),
+                      );
+                    },
                   ),
                 );
               },
-            );
-          },
+            ),
+          ),
         ),
       ),
     );
