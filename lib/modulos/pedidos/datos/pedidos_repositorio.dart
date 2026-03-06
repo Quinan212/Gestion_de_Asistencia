@@ -703,7 +703,7 @@ class PedidosRepositorio {
 
       final ventaId = await db.into(db.tablaVentas).insert(
         TablaVentasCompanion.insert(
-          total: Value(pRow.subtotal),
+          total: Value(pRow.total),
           nota: Value(notaVenta),
         ),
       );

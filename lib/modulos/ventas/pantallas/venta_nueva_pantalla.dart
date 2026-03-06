@@ -719,6 +719,7 @@ class _VentaNuevaPantallaState extends State<VentaNuevaPantalla> {
       if (!mounted) return;
       Navigator.pop(context);
     } catch (_) {
+      if (!mounted) return;
       setState(() {
         _guardando = false;
         _error = 'No se pudo guardar la venta';

@@ -7,6 +7,7 @@ class InventarioEstado {
   final List<Producto> productos;
   final String filtro;
   final bool mostrarInactivos;
+  final String orden;
 
   const InventarioEstado({
     required this.cargando,
@@ -14,6 +15,7 @@ class InventarioEstado {
     required this.productos,
     required this.filtro,
     required this.mostrarInactivos,
+    required this.orden,
   });
 
   factory InventarioEstado.inicial() {
@@ -23,6 +25,7 @@ class InventarioEstado {
       productos: [],
       filtro: '',
       mostrarInactivos: false,
+      orden: 'nombre',
     );
   }
 
@@ -32,6 +35,7 @@ class InventarioEstado {
     List<Producto>? productos,
     String? filtro,
     bool? mostrarInactivos,
+    String? orden,
   }) {
     return InventarioEstado(
       cargando: cargando ?? this.cargando,
@@ -39,6 +43,7 @@ class InventarioEstado {
       productos: productos ?? this.productos,
       filtro: filtro ?? this.filtro,
       mostrarInactivos: mostrarInactivos ?? this.mostrarInactivos,
+      orden: orden ?? this.orden,
     );
   }
 }

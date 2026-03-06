@@ -293,6 +293,10 @@ class _CompraNuevaPantallaState extends State<CompraNuevaPantalla> {
       for (final l in _lineas) {
         total += l.subtotal;
 
+        final prod = await Proveedores.inventarioRepositorio.obtenerProducto(l.productoId);
+        final stockAnterior =
+            (prod == null) ? 0.0 : await Proveedores.inventarioRepositorio.calcularStockActual(prod.id);
+
         await Proveedores.comprasRepositorio.agregarLinea(
           compraId: compraId,
           productoId: l.productoId,
@@ -308,18 +312,14 @@ class _CompraNuevaPantallaState extends State<CompraNuevaPantalla> {
           referencia: 'compra:$compraId',
         );
 
-        final prod = await Proveedores.inventarioRepositorio.obtenerProducto(l.productoId);
         if (prod != null) {
-          final stockAnterior = await Proveedores.inventarioRepositorio.calcularStockActual(prod.id);
-
           final double costoAnterior = prod.costoActual;
           final double comprado = l.cantidad;
           final double costoCompra = l.costoUnitario;
-
           final double stockNuevo = stockAnterior + comprado;
 
           double costoNuevo;
-          if (stockAnterior <= 0 || costoAnterior <= 0) {
+          if (stockAnterior <= 0 || costoAnterior <= 0 || stockNuevo <= 0) {
             costoNuevo = costoCompra;
           } else {
             costoNuevo = ((stockAnterior * costoAnterior) + (comprado * costoCompra)) / stockNuevo;
@@ -346,6 +346,7 @@ class _CompraNuevaPantallaState extends State<CompraNuevaPantalla> {
       if (!mounted) return;
       Navigator.pop(context);
     } catch (_) {
+      if (!mounted) return;
       setState(() {
         _guardando = false;
         _error = 'No se pudo guardar la compra';

@@ -20,15 +20,15 @@ class ReportesControlador extends ChangeNotifier {
     cargando = true;
     error = null;
     notifyListeners();
-    consumo = await _repo.consumoPorProducto(dias: 30);
+
     try {
+      consumo = await _repo.consumoPorProducto(dias: 30);
       ventasDia = await _repo.ventasPorDia(dias: 14);
       reposicion = await _repo.reposicionPorMinimo();
-      cargando = false;
-      notifyListeners();
     } catch (_) {
-      cargando = false;
       error = 'No se pudieron cargar los reportes';
+    } finally {
+      cargando = false;
       notifyListeners();
     }
   }
