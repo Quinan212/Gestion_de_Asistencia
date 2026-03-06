@@ -10,11 +10,7 @@ import 'package:gestion_de_stock/modulos/combos/modelos/componente_combo.dart';
 
 class ComboEditorPantalla extends StatefulWidget {
   final int comboId;
-
-  /// si true: se usa embebido en tablet (panel derecho) sin Scaffold/AppBar
   final bool embebido;
-
-  /// avisar al padre (lista) que cambió algo
   final VoidCallback? onChanged;
 
   const ComboEditorPantalla({
@@ -31,17 +27,39 @@ class ComboEditorPantalla extends StatefulWidget {
 class _ComboEditorPantallaState extends State<ComboEditorPantalla> {
   String _moneda = r'$';
 
+  bool _cargando = true;
+  bool _guardando = false;
+
+  Combo? _combo;
+  List<ComponenteCombo> _componentes = [];
+  List<Producto> _productos = [];
+
+  final _nombreCtrl = TextEditingController();
+  final _precioCtrl = TextEditingController();
+  bool _activo = true;
+
+  bool _dirty = false;
+
   @override
   void initState() {
     super.initState();
     _cargarMoneda();
+    _cargarTodo();
+  }
+
+  @override
+  void dispose() {
+    _nombreCtrl.dispose();
+    _precioCtrl.dispose();
+    super.dispose();
   }
 
   @override
   void didUpdateWidget(covariant ComboEditorPantalla oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.comboId != widget.comboId) {
-      setState(() {});
+      _dirty = false;
+      _cargarTodo();
     }
   }
 
@@ -51,13 +69,53 @@ class _ComboEditorPantallaState extends State<ComboEditorPantalla> {
     setState(() => _moneda = m);
   }
 
-  Future<Combo?> _cargarCombo() => Proveedores.combosRepositorio.obtenerCombo(widget.comboId);
+  Future<void> _cargarTodo() async {
+    setState(() => _cargando = true);
 
-  Future<List<ComponenteCombo>> _cargarComponentes() =>
-      Proveedores.combosRepositorio.listarComponentes(widget.comboId);
+    try {
+      final combo = await Proveedores.combosRepositorio.obtenerCombo(widget.comboId);
+      final comps = await Proveedores.combosRepositorio.listarComponentes(widget.comboId);
+      final prods = await Proveedores.inventarioRepositorio.listarProductos(incluirInactivos: true);
 
-  Future<List<Producto>> _cargarProductos() =>
-      Proveedores.inventarioRepositorio.listarProductos(incluirInactivos: true);
+      if (!mounted) return;
+
+      _combo = combo;
+      _componentes = List.of(comps);
+      _productos = List.of(prods);
+
+      _nombreCtrl.text = combo?.nombre ?? '';
+      _precioCtrl.text = ((combo?.precioVenta ?? 0.0)).toStringAsFixed(2);
+      _activo = combo?.activo ?? true;
+
+      _dirty = false;
+
+      setState(() => _cargando = false);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _cargando = false);
+    }
+  }
+
+  double _parseNum(String t) {
+    var s = t.trim();
+    if (s.isEmpty) return 0.0;
+
+    s = s.replaceAll(' ', '');
+    if (s.contains('.') && s.contains(',')) {
+      s = s.replaceAll('.', '').replaceAll(',', '.');
+    } else if (s.contains(',') && !s.contains('.')) {
+      s = s.replaceAll(',', '.');
+    }
+
+    // sin escape redundante
+    s = s.replaceAll(RegExp(r'[^0-9.\-]'), '');
+    return double.tryParse(s) ?? 0.0;
+  }
+
+  void _marcarDirty() {
+    if (_dirty) return;
+    setState(() => _dirty = true);
+  }
 
   Widget _miniaturaProducto(Producto? p) {
     if (p == null) return const Icon(Icons.inventory_2_outlined);
@@ -68,92 +126,18 @@ class _ComboEditorPantallaState extends State<ComboEditorPantalla> {
     if (ok) {
       return ClipRRect(
         borderRadius: BorderRadius.circular(8),
-        child: Image.file(
-          File(ruta),
-          width: 34,
-          height: 34,
-          fit: BoxFit.cover,
-        ),
+        child: Image.file(File(ruta), width: 34, height: 34, fit: BoxFit.cover),
       );
     }
 
     return const Icon(Icons.image_outlined);
   }
 
-  Future<void> _editarCombo(Combo combo) async {
-    final nombreCtrl = TextEditingController(text: combo.nombre);
-    final precioCtrl = TextEditingController(text: combo.precioVenta.toStringAsFixed(2));
-    bool activo = combo.activo;
-
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setStateLocal) {
-            return AlertDialog(
-              scrollable: true,
-              title: const Text('Editar combo'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: nombreCtrl,
-                    decoration: const InputDecoration(labelText: 'Nombre'),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: precioCtrl,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    decoration: InputDecoration(labelText: 'Precio de venta ($_moneda)'),
-                  ),
-                  const SizedBox(height: 12),
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('Activo'),
-                    subtitle: const Text('Si está apagado, no se puede vender'),
-                    value: activo,
-                    onChanged: (v) => setStateLocal(() => activo = v),
-                  ),
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context, false),
-                  child: const Text('Cancelar'),
-                ),
-                FilledButton(
-                  onPressed: () => Navigator.pop(context, true),
-                  child: const Text('Guardar'),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-
-    if (ok != true) return;
-
-    final nombre = nombreCtrl.text.trim();
-    if (nombre.isEmpty) return;
-
-    final precio = double.tryParse(precioCtrl.text.trim().replaceAll(',', '.')) ?? 0.0;
-
-    await Proveedores.combosRepositorio.actualizarCombo(
-      id: combo.id,
-      nombre: nombre,
-      precioVenta: precio,
-      activo: activo,
-    );
-
-    widget.onChanged?.call();
-    if (!mounted) return;
-    setState(() {});
-  }
-
   Future<void> _agregarComponente() async {
-    final productos = await _cargarProductos();
-    if (!mounted) return;
+    if (_guardando) return;
+
+    final activos = _productos.where((p) => p.activo).toList();
+    if (activos.isEmpty) return;
 
     Producto? seleccionado;
     final cantidadCtrl = TextEditingController(text: '1');
@@ -172,8 +156,7 @@ class _ComboEditorPantallaState extends State<ComboEditorPantalla> {
                   DropdownButtonFormField<Producto>(
                     initialValue: seleccionado,
                     isExpanded: true,
-                    items: productos
-                        .where((p) => p.activo)
+                    items: activos
                         .map(
                           (p) => DropdownMenuItem<Producto>(
                         value: p,
@@ -193,27 +176,6 @@ class _ComboEditorPantallaState extends State<ComboEditorPantalla> {
                       ),
                     )
                         .toList(),
-                    selectedItemBuilder: (context) {
-                      final activos = productos.where((p) => p.activo).toList();
-                      return activos.map((p) {
-                        return Align(
-                          alignment: Alignment.centerLeft,
-                          child: Row(
-                            children: [
-                              _miniaturaProducto(p),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Text(
-                                  p.nombre,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      }).toList();
-                    },
                     onChanged: (p) => setStateLocal(() => seleccionado = p),
                     decoration: const InputDecoration(labelText: 'Producto'),
                   ),
@@ -244,35 +206,45 @@ class _ComboEditorPantallaState extends State<ComboEditorPantalla> {
     if (ok != true) return;
     if (seleccionado == null) return;
 
-    final cantTxt = cantidadCtrl.text.trim().replaceAll(',', '.');
-    final cantidad = double.tryParse(cantTxt);
-    if (cantidad == null || cantidad == 0) return;
+    final cantidad = _parseNum(cantidadCtrl.text);
+    if (cantidad == 0) return;
 
-    await Proveedores.combosRepositorio.agregarComponente(
-      comboId: widget.comboId,
-      productoId: seleccionado!.id,
-      cantidad: cantidad,
-    );
+    setState(() {
+      final pid = seleccionado!.id;
+      final idx = _componentes.indexWhere((c) => c.productoId == pid);
 
-    widget.onChanged?.call();
-    if (!mounted) return;
-    setState(() {});
-  }
+      if (idx >= 0) {
+        final actual = _componentes[idx];
+        _componentes[idx] = ComponenteCombo(
+          id: actual.id,
+          comboId: actual.comboId,
+          productoId: actual.productoId,
+          cantidad: actual.cantidad + cantidad,
+        );
+      } else {
+        _componentes.add(
+          ComponenteCombo(
+            id: 0,
+            comboId: widget.comboId,
+            productoId: pid,
+            cantidad: cantidad,
+          ),
+        );
+      }
 
-  Future<void> _borrarComponente(int componenteId) async {
-    await Proveedores.combosRepositorio.borrarComponentePorId(componenteId);
-    widget.onChanged?.call();
-    if (!mounted) return;
-    setState(() {});
+      _dirty = true;
+    });
   }
 
   Future<void> _limpiarReceta() async {
+    if (_guardando) return;
+
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) {
         return AlertDialog(
           title: const Text('Limpiar receta'),
-          content: const Text('Esto borra todos los productos del combo.'),
+          content: const Text('Esto borra todos los productos del combo (queda pendiente hasta guardar).'),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
@@ -280,7 +252,7 @@ class _ComboEditorPantallaState extends State<ComboEditorPantalla> {
             ),
             FilledButton(
               onPressed: () => Navigator.pop(context, true),
-              child: const Text('Borrar todo'),
+              child: const Text('Limpiar'),
             ),
           ],
         );
@@ -289,18 +261,18 @@ class _ComboEditorPantallaState extends State<ComboEditorPantalla> {
 
     if (ok != true) return;
 
-    await Proveedores.combosRepositorio.borrarComponentesDeCombo(widget.comboId);
-    widget.onChanged?.call();
-    if (!mounted) return;
-    setState(() {});
+    setState(() {
+      _componentes.clear();
+      _dirty = true;
+    });
   }
 
   Future<double> _calcularCapacidad(List<ComponenteCombo> componentes) async {
     if (componentes.isEmpty) return 0;
 
     double? capacidad;
-
     for (final c in componentes) {
+      if (c.cantidad == 0) continue;
       final stock = await Proveedores.inventarioRepositorio.calcularStockActual(c.productoId);
       final posible = stock / c.cantidad;
       capacidad = (capacidad == null) ? posible : (posible < capacidad ? posible : capacidad);
@@ -310,39 +282,100 @@ class _ComboEditorPantallaState extends State<ComboEditorPantalla> {
     return capacidad.floorToDouble();
   }
 
-  Widget _headerEmbebido(Combo combo) {
-    // FIX: en vez de 4 IconButton en una sola Row (que desborda),
-    // usamos Wrap para que haga salto de línea si falta ancho.
+  Future<void> _guardarCambios() async {
+    if (_guardando) return;
+    if (_combo == null) return;
+    if (!_dirty) return;
+
+    final nombre = _nombreCtrl.text.trim();
+    if (nombre.isEmpty) return;
+
+    final precio = _parseNum(_precioCtrl.text);
+    if (precio < 0) return;
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Guardar cambios'),
+          content: const Text('Vas a actualizar el combo y su receta. ¿Seguro?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Guardar'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (ok != true) return;
+
+    setState(() => _guardando = true);
+
+    try {
+      await Proveedores.combosRepositorio.actualizarCombo(
+        id: widget.comboId,
+        nombre: nombre,
+        precioVenta: precio,
+        activo: _activo,
+      );
+
+      await Proveedores.combosRepositorio.borrarComponentesDeCombo(widget.comboId);
+
+      for (final c in _componentes) {
+        await Proveedores.combosRepositorio.agregarComponente(
+          comboId: widget.comboId,
+          productoId: c.productoId,
+          cantidad: c.cantidad,
+        );
+      }
+
+      widget.onChanged?.call();
+
+      if (!mounted) return;
+      setState(() {
+        _guardando = false;
+        _dirty = false;
+      });
+
+      await _cargarTodo();
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _guardando = false);
+    }
+  }
+
+  Widget _headerEmbebido() {
     final cs = Theme.of(context).colorScheme;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          combo.nombre,
+          _nombreCtrl.text.trim().isEmpty ? 'Combo' : _nombreCtrl.text.trim(),
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
           style: Theme.of(context).textTheme.titleLarge,
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 10),
         Wrap(
-          spacing: 8,
-          runSpacing: 8,
+          spacing: 10,
+          runSpacing: 10,
           children: [
-            FilledButton.tonalIcon(
-              onPressed: () => _editarCombo(combo),
-              icon: const Icon(Icons.edit),
-              label: const Text('Editar'),
-            ),
-            FilledButton.tonalIcon(
-              onPressed: _limpiarReceta,
+            OutlinedButton.icon(
+              onPressed: _guardando ? null : _limpiarReceta,
               icon: Icon(Icons.delete_sweep_outlined, color: cs.error),
               label: Text('Limpiar', style: TextStyle(color: cs.error)),
             ),
-            FilledButton.tonalIcon(
-              onPressed: () => setState(() {}),
-              icon: const Icon(Icons.refresh),
-              label: const Text('Actualizar'),
+            FilledButton.icon(
+              onPressed: (_guardando || !_dirty) ? null : _guardarCambios,
+              icon: const Icon(Icons.save),
+              label: Text(_guardando ? 'Guardando...' : 'Guardar'),
             ),
           ],
         ),
@@ -351,208 +384,196 @@ class _ComboEditorPantallaState extends State<ComboEditorPantalla> {
     );
   }
 
-  Widget _contenido() {
-    return FutureBuilder<Combo?>(
-      future: _cargarCombo(),
-      builder: (context, snapC) {
-        final combo = snapC.data;
+  Widget _body() {
+    if (_cargando) return const Center(child: CircularProgressIndicator());
+    if (_combo == null) return const Center(child: Text('Combo no encontrado'));
 
-        if (snapC.connectionState != ConnectionState.done) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        if (combo == null) return const Center(child: Text('Combo no encontrado'));
+    final porId = <int, Producto>{for (final p in _productos) p.id: p};
+    final cs = Theme.of(context).colorScheme;
 
-        return Padding(
-          padding: widget.embebido ? EdgeInsets.zero : const EdgeInsets.all(12),
-          child: FutureBuilder<List<ComponenteCombo>>(
-            future: _cargarComponentes(),
-            builder: (context, snapComp) {
-              if (snapComp.connectionState != ConnectionState.done) {
-                return const Center(child: CircularProgressIndicator());
-              }
+    return ListView(
+      padding: const EdgeInsets.all(12),
+      children: [
+        if (widget.embebido) _headerEmbebido(),
 
-              final componentes = snapComp.data ?? [];
-
-              return FutureBuilder<List<Producto>>(
-                future: _cargarProductos(),
-                builder: (context, snapProd) {
-                  if (snapProd.connectionState != ConnectionState.done) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-
-                  final productos = snapProd.data ?? [];
-                  final porId = <int, Producto>{for (final p in productos) p.id: p};
-
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (widget.embebido) _headerEmbebido(combo),
-
-                      Text(
-                        'Precio: ${Formatos.dinero(_moneda, combo.precioVenta)}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 12),
-
-                      SwitchListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: const Text('Activo'),
-                        subtitle: const Text('Si está apagado, no se puede vender'),
-                        value: combo.activo,
-                        onChanged: (v) async {
-                          await Proveedores.combosRepositorio.actualizarCombo(
-                            id: combo.id,
-                            nombre: combo.nombre,
-                            precioVenta: combo.precioVenta,
-                            activo: v,
-                          );
-                          widget.onChanged?.call();
-                          if (!context.mounted) return;
-                          setState(() {});
-                        },
-                      ),
-
-                      const SizedBox(height: 12),
-                      FutureBuilder<double>(
-                        future: _calcularCapacidad(componentes),
-                        builder: (context, snapCap) {
-                          final cap = snapCap.data ?? 0;
-                          return Text(
-                            'Podés armar: ${cap.toStringAsFixed(0)} combos',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          );
-                        },
-                      ),
-
-                      const SizedBox(height: 12),
-
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              'Productos',
-                              style: Theme.of(context).textTheme.titleMedium,
-                            ),
-                          ),
-                          // FIX: botón no “encima” -> si no entra, que se achique
-                          if (widget.embebido)
-                            Flexible(
-                              child: Align(
-                                alignment: Alignment.centerRight,
-                                child: FilledButton.icon(
-                                  onPressed: _agregarComponente,
-                                  icon: const Icon(Icons.add),
-                                  label: const Text('Agregar'),
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-
-                      Expanded(
-                        child: componentes.isEmpty
-                            ? const Center(child: Text('Agregá productos al combo'))
-                            : ListView.separated(
-                          itemCount: componentes.length,
-                          separatorBuilder: (context, index) => const SizedBox(height: 8),
-                          itemBuilder: (context, i) {
-                            final comp = componentes[i];
-                            final prod = porId[comp.productoId];
-
-                            final nombre = prod?.nombre ?? 'Producto ${comp.productoId}';
-                            final unidad = prod?.unidad ?? '';
-
-                            return Dismissible(
-                              key: ValueKey('componente_${comp.id}'),
-                              direction: DismissDirection.endToStart,
-                              background: Container(
-                                alignment: Alignment.centerRight,
-                                padding: const EdgeInsets.symmetric(horizontal: 16),
-                                color: Theme.of(context).colorScheme.error,
-                                child: Icon(
-                                  Icons.delete,
-                                  color: Theme.of(context).colorScheme.onError,
-                                ),
-                              ),
-                              confirmDismiss: (_) async {
-                                final ok = await showDialog<bool>(
-                                  context: context,
-                                  builder: (context) {
-                                    return AlertDialog(
-                                      title: const Text('Borrar componente'),
-                                      content: Text('Borrar "$nombre" del combo?'),
-                                      actions: [
-                                        TextButton(
-                                          onPressed: () => Navigator.pop(context, false),
-                                          child: const Text('Cancelar'),
-                                        ),
-                                        FilledButton(
-                                          onPressed: () => Navigator.pop(context, true),
-                                          child: const Text('Borrar'),
-                                        ),
-                                      ],
-                                    );
-                                  },
-                                );
-                                return ok == true;
-                              },
-                              onDismissed: (_) => _borrarComponente(comp.id),
-                              child: Card(
-                                child: ListTile(
-                                  leading: _miniaturaProducto(prod),
-                                  title: Text(
-                                    nombre,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                  subtitle: Text(
-                                    'Cantidad: ${comp.cantidad.toStringAsFixed(2)} $unidad',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                  trailing: const Icon(Icons.swipe_left),
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                    ],
-                  );
-                },
-              );
-            },
+        Card(
+          clipBehavior: Clip.antiAlias,
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              children: [
+                TextField(
+                  controller: _nombreCtrl,
+                  enabled: !_guardando,
+                  decoration: const InputDecoration(labelText: 'Nombre'),
+                  onChanged: (_) => _marcarDirty(),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _precioCtrl,
+                  enabled: !_guardando,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: InputDecoration(labelText: 'Precio de venta ($_moneda)'),
+                  onChanged: (_) => _marcarDirty(),
+                ),
+                const SizedBox(height: 8),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Activo'),
+                  subtitle: Text(
+                    'Si está apagado, no se puede vender',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                  ),
+                  value: _activo,
+                  onChanged: _guardando
+                      ? null
+                      : (v) {
+                    setState(() {
+                      _activo = v;
+                      _dirty = true;
+                    });
+                  },
+                ),
+              ],
+            ),
           ),
-        );
-      },
+        ),
+
+        const SizedBox(height: 10),
+
+        Card(
+          clipBehavior: Clip.antiAlias,
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: FutureBuilder<double>(
+              future: _calcularCapacidad(_componentes),
+              builder: (context, snapCap) {
+                final cap = snapCap.data ?? 0;
+                return Text('Podés armar: ${cap.toStringAsFixed(0)} combos');
+              },
+            ),
+          ),
+        ),
+
+        const SizedBox(height: 12),
+
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            Text('Productos', style: Theme.of(context).textTheme.titleMedium),
+            FilledButton.icon(
+              onPressed: _guardando ? null : _agregarComponente,
+              icon: const Icon(Icons.add),
+              label: const Text('Agregar'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+
+        if (_componentes.isEmpty)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 18),
+            child: Center(child: Text('Agregá productos al combo')),
+          )
+        else
+          for (final comp in _componentes) ...[
+            Builder(
+              builder: (context) {
+                final pid = comp.productoId;
+                final prod = porId[pid];
+                final nombre = prod?.nombre ?? 'Producto $pid';
+                final unidad = (prod?.unidad ?? '').trim();
+
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Dismissible(
+                    key: ValueKey('comp_$pid'),
+                    direction: DismissDirection.endToStart,
+                    background: Container(
+                      alignment: Alignment.centerRight,
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      color: Theme.of(context).colorScheme.error,
+                      child: Icon(Icons.delete, color: Theme.of(context).colorScheme.onError),
+                    ),
+                    confirmDismiss: (_) async {
+                      final ok = await showDialog<bool>(
+                        context: context,
+                        builder: (context) {
+                          return AlertDialog(
+                            title: const Text('Borrar componente'),
+                            content: Text('Borrar "$nombre" del combo? (queda pendiente)'),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(context, false),
+                                child: const Text('Cancelar'),
+                              ),
+                              FilledButton(
+                                onPressed: () => Navigator.pop(context, true),
+                                child: const Text('Borrar'),
+                              ),
+                            ],
+                          );
+                        },
+                      );
+                      return ok == true;
+                    },
+                    onDismissed: (_) {
+                      setState(() {
+                        _componentes.removeWhere((x) => x.productoId == pid);
+                        _dirty = true;
+                      });
+                    },
+                    child: Card(
+                      child: ListTile(
+                        leading: _miniaturaProducto(prod),
+                        title: Text(nombre, maxLines: 1, overflow: TextOverflow.ellipsis),
+                        subtitle: Text(
+                          'Cantidad: ${comp.cantidad.toStringAsFixed(2)} $unidad',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        trailing: const Icon(Icons.swipe_left),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ],
+
+        const SizedBox(height: 10),
+
+        if (!widget.embebido)
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: (_guardando || !_dirty) ? null : _guardarCambios,
+              icon: const Icon(Icons.save),
+              label: Text(_guardando ? 'Guardando...' : 'Guardar cambios'),
+            ),
+          ),
+      ],
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    if (widget.embebido) {
-      return _contenido();
-    }
+    if (widget.embebido) return _body();
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Editar combo'),
         actions: [
           IconButton(
-            onPressed: () => setState(() {}),
-            icon: const Icon(Icons.refresh),
+            onPressed: _guardando ? null : _limpiarReceta,
+            icon: const Icon(Icons.delete_sweep_outlined),
+            tooltip: 'Limpiar receta',
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _agregarComponente,
-        icon: const Icon(Icons.add),
-        label: const Text('Agregar'),
-      ),
-      body: _contenido(),
+      body: _body(),
     );
   }
 }

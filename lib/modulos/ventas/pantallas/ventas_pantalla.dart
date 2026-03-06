@@ -17,7 +17,7 @@ class VentasPantalla extends StatefulWidget {
 
 class _VentasPantallaState extends State<VentasPantalla> {
   static const double _kTablet = 900;
-
+  static const bool _mostrarBotonNuevaVenta = false;
   String _moneda = r'$';
   int? _seleccionadaId;
   int _refreshTick = 0;
@@ -462,6 +462,7 @@ class _VentasPantallaState extends State<VentasPantalla> {
               Widget panelLista() {
                 return Column(
                   children: [
+                    if (_mostrarBotonNuevaVenta)
                     _botonNuevaVenta(),
                     const SizedBox(height: 10),
                     _buscador(),

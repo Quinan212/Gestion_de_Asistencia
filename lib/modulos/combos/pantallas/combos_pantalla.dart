@@ -44,7 +44,6 @@ class _CombosPantallaState extends State<CombosPantalla> {
 
   Future<void> _nuevoCombo() async {
     final nombreCtrl = TextEditingController();
-    final precioCtrl = TextEditingController(text: '0');
 
     final ok = await showDialog<bool>(
       context: context,
@@ -52,20 +51,10 @@ class _CombosPantallaState extends State<CombosPantalla> {
         return AlertDialog(
           scrollable: true,
           title: const Text('Nuevo combo'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nombreCtrl,
-                decoration: const InputDecoration(labelText: 'Nombre'),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: precioCtrl,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: const InputDecoration(labelText: 'Precio de venta'),
-              ),
-            ],
+          content: TextField(
+            controller: nombreCtrl,
+            decoration: const InputDecoration(labelText: 'Nombre'),
+            textInputAction: TextInputAction.done,
           ),
           actions: [
             TextButton(
@@ -84,12 +73,13 @@ class _CombosPantallaState extends State<CombosPantalla> {
     if (ok != true) return;
 
     final nombre = nombreCtrl.text.trim();
-    final precioTxt = precioCtrl.text.trim().replaceAll(',', '.');
-    final precio = double.tryParse(precioTxt) ?? 0;
-
     if (nombre.isEmpty) return;
 
-    final id = await _controlador.crearComboRapido(nombre: nombre, precioVenta: precio);
+    final id = await _controlador.crearComboRapido(
+      nombre: nombre,
+      precioVenta: 0.0, // no lo pedimos acá
+    );
+
     if (!mounted || id == null) return;
 
     final ancha = MediaQuery.of(context).size.width >= 900;

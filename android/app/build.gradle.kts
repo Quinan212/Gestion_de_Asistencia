@@ -15,9 +15,13 @@ if (keystorePropertiesFile.exists()) {
 
 android {
     namespace = "ar.maillet.gestion_de_stock"
-    compileSdk = flutter.compileSdkVersion
+
+    // fijo para evitar lStar / recursos de libs
+    compileSdk = 36
+
     ndkVersion = flutter.ndkVersion
-    buildToolsVersion = "34.0.0"
+    buildToolsVersion = "35.0.0"
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -29,8 +33,11 @@ android {
 
     defaultConfig {
         applicationId = "ar.maillet.gestion_de_stock"
+
+        // fijo (muchas libs esperan 21+)
         minSdk = flutter.minSdkVersion
-        targetSdk = flutter.targetSdkVersion
+
+        targetSdk = 35
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
@@ -50,6 +57,9 @@ android {
     buildTypes {
         release {
             signingConfig = signingConfigs.getByName("release")
+            // opcional: si querés ofuscar/achicar luego vemos proguard
+            // isMinifyEnabled = true
+            // isShrinkResources = true
         }
         debug {
             signingConfig = signingConfigs.getByName("debug")
