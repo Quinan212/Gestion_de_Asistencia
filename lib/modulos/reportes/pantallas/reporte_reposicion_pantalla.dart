@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 
-import 'package:gestion_de_stock/infraestructura/dep_inyeccion/proveedores.dart';
-import 'package:gestion_de_stock/infraestructura/servicios/exportacion_csv.dart';
-import 'package:gestion_de_stock/modulos/combos/modelos/combo.dart';
-import 'package:gestion_de_stock/modulos/inventario/modelos/producto.dart';
+import 'package:gestion_de_asistencias/aplicacion/utiles/formatos.dart';
+import 'package:gestion_de_asistencias/aplicacion/utiles/layout_app.dart';
+import 'package:gestion_de_asistencias/aplicacion/widgets/tablet_master_detail_layout.dart';
+import 'package:gestion_de_asistencias/infraestructura/dep_inyeccion/proveedores.dart';
+import 'package:gestion_de_asistencias/infraestructura/servicios/exportacion_csv.dart';
+import 'package:gestion_de_asistencias/modulos/combos/modelos/combo.dart';
+import 'package:gestion_de_asistencias/modulos/inventario/modelos/producto.dart';
 import '../logica/reportes_controlador.dart';
 
 class ReporteReposicionPantalla extends StatefulWidget {
@@ -12,11 +15,12 @@ class ReporteReposicionPantalla extends StatefulWidget {
   const ReporteReposicionPantalla({super.key, this.embebido = false});
 
   @override
-  State<ReporteReposicionPantalla> createState() => _ReporteReposicionPantallaState();
+  State<ReporteReposicionPantalla> createState() =>
+      _ReporteReposicionPantallaState();
 }
 
 class _ReporteReposicionPantallaState extends State<ReporteReposicionPantalla> {
-  static const double _kTablet = 900;
+  static const double _kTablet = LayoutApp.kTablet;
 
   late final ReportesControlador _c;
 
@@ -43,7 +47,8 @@ class _ReporteReposicionPantallaState extends State<ReporteReposicionPantalla> {
     super.dispose();
   }
 
-  Future<List<Combo>> _cargarCombos() => Proveedores.combosRepositorio.listarCombos();
+  Future<List<Combo>> _cargarCombos() =>
+      Proveedores.combosRepositorio.listarCombos();
 
   Future<void> _calcularFaltantesCombo() async {
     setState(() {
@@ -53,21 +58,23 @@ class _ReporteReposicionPantallaState extends State<ReporteReposicionPantalla> {
 
     final comboId = _comboId;
     if (comboId == null) {
-      setState(() => _errorCombo = 'Elegí un combo');
+      setState(() => _errorCombo = 'Elegi un combo');
       return;
     }
 
     final objTxt = _objetivoCtrl.text.trim().replaceAll(',', '.');
     final objetivo = double.tryParse(objTxt);
     if (objetivo == null || objetivo <= 0) {
-      setState(() => _errorCombo = 'Objetivo inválido');
+      setState(() => _errorCombo = 'Objetivo invalido');
       return;
     }
 
     setState(() => _calculando = true);
 
     try {
-      final componentes = await Proveedores.combosRepositorio.listarComponentes(comboId);
+      final componentes = await Proveedores.combosRepositorio.listarComponentes(
+        comboId,
+      );
       if (componentes.isEmpty) {
         setState(() {
           _calculando = false;
@@ -85,7 +92,8 @@ class _ReporteReposicionPantallaState extends State<ReporteReposicionPantalla> {
 
       for (final c in componentes) {
         final requerido = c.cantidad * objetivo;
-        final stock = await Proveedores.inventarioRepositorio.calcularStockActual(c.productoId);
+        final stock = await Proveedores.inventarioRepositorio
+            .calcularStockActual(c.productoId);
         final falta = requerido - stock;
 
         if (falta > 1e-9) {
@@ -102,7 +110,7 @@ class _ReporteReposicionPantallaState extends State<ReporteReposicionPantalla> {
       }
 
       faltantes.sort(
-            (a, b) => (b['faltante'] as double).compareTo(a['faltante'] as double),
+        (a, b) => (b['faltante'] as double).compareTo(a['faltante'] as double),
       );
 
       setState(() {
@@ -127,9 +135,18 @@ class _ReporteReposicionPantallaState extends State<ReporteReposicionPantalla> {
           return [
             (fila['nombre'] as String),
             (fila['unidad'] as String),
-            (fila['stock'] as double).toStringAsFixed(2),
-            (fila['minimo'] as double).toStringAsFixed(2),
-            (fila['faltante'] as double).toStringAsFixed(2),
+            Formatos.cantidad(
+              (fila['stock'] as double),
+              unidad: (fila['unidad'] as String),
+            ),
+            Formatos.cantidad(
+              (fila['minimo'] as double),
+              unidad: (fila['unidad'] as String),
+            ),
+            Formatos.cantidad(
+              (fila['faltante'] as double),
+              unidad: (fila['unidad'] as String),
+            ),
           ];
         }).toList();
 
@@ -140,9 +157,9 @@ class _ReporteReposicionPantallaState extends State<ReporteReposicionPantalla> {
         );
 
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('CSV guardado: $path')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('CSV guardado: $path')));
       } else {
         final comboId = _comboId;
         if (comboId == null) return;
@@ -154,9 +171,18 @@ class _ReporteReposicionPantallaState extends State<ReporteReposicionPantalla> {
           return [
             (fila['nombre'] as String),
             (fila['unidad'] as String),
-            (fila['stock'] as double).toStringAsFixed(2),
-            (fila['requerido'] as double).toStringAsFixed(2),
-            (fila['faltante'] as double).toStringAsFixed(2),
+            Formatos.cantidad(
+              (fila['stock'] as double),
+              unidad: (fila['unidad'] as String),
+            ),
+            Formatos.cantidad(
+              (fila['requerido'] as double),
+              unidad: (fila['unidad'] as String),
+            ),
+            Formatos.cantidad(
+              (fila['faltante'] as double),
+              unidad: (fila['unidad'] as String),
+            ),
           ];
         }).toList();
 
@@ -167,15 +193,15 @@ class _ReporteReposicionPantallaState extends State<ReporteReposicionPantalla> {
         );
 
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('CSV guardado: $path')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('CSV guardado: $path')));
       }
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No se pudo exportar')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('No se pudo exportar')));
     }
   }
 
@@ -183,11 +209,15 @@ class _ReporteReposicionPantallaState extends State<ReporteReposicionPantalla> {
     return AnimatedBuilder(
       animation: _c,
       builder: (context, _) {
-        if (_c.cargando) return const Center(child: CircularProgressIndicator());
+        if (_c.cargando) {
+          return const Center(child: CircularProgressIndicator());
+        }
         if (_c.error != null) return Center(child: Text(_c.error!));
 
         final datos = _c.reposicion;
-        if (datos.isEmpty) return const Center(child: Text('Todo está por encima del mínimo'));
+        if (datos.isEmpty) {
+          return const Center(child: Text('Todo esta por encima del minimo'));
+        }
 
         return ListView.separated(
           padding: const EdgeInsets.only(top: 12),
@@ -203,14 +233,18 @@ class _ReporteReposicionPantallaState extends State<ReporteReposicionPantalla> {
 
             return Card(
               child: ListTile(
-                title: Text(nombre, maxLines: 1, overflow: TextOverflow.ellipsis),
+                title: Text(
+                  nombre,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
                 subtitle: Text(
-                  'Stock: ${stock.toStringAsFixed(2)} $unidad  •  Mínimo: ${minimo.toStringAsFixed(2)}',
+                  'Stock: ${Formatos.cantidad(stock, unidad: unidad)} $unidad  -  Minimo: ${Formatos.cantidad(minimo, unidad: unidad)}',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
                 trailing: Text(
-                  '-${faltante.toStringAsFixed(2)}',
+                  '-${Formatos.cantidad(faltante, unidad: unidad)}',
                   style: TextStyle(color: Theme.of(context).colorScheme.error),
                 ),
               ),
@@ -232,7 +266,7 @@ class _ReporteReposicionPantallaState extends State<ReporteReposicionPantalla> {
         if (combos.isEmpty) {
           return const Padding(
             padding: EdgeInsets.only(top: 12),
-            child: Text('Primero creá un combo'),
+            child: Text('Primero crea un combo'),
           );
         }
 
@@ -244,17 +278,20 @@ class _ReporteReposicionPantallaState extends State<ReporteReposicionPantalla> {
               items: combos
                   .map(
                     (c) => DropdownMenuItem<int>(
-                  value: c.id,
-                  child: Text(
-                    c.nombre,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              )
+                      value: c.id,
+                      child: Text(
+                        c.nombre,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  )
                   .toList(),
               onChanged: (id) {
-                final c = combos.firstWhere((x) => x.id == id, orElse: () => combos.first);
+                final c = combos.firstWhere(
+                  (x) => x.id == id,
+                  orElse: () => combos.first,
+                );
                 setState(() {
                   _comboId = id;
                   _comboNombre = (id == null) ? '' : c.nombre;
@@ -265,15 +302,21 @@ class _ReporteReposicionPantallaState extends State<ReporteReposicionPantalla> {
             const SizedBox(height: 12),
             TextField(
               controller: _objetivoCtrl,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(labelText: 'Objetivo de combos'),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              decoration: const InputDecoration(
+                labelText: 'Objetivo de combos',
+              ),
             ),
             const SizedBox(height: 12),
             SizedBox(
               width: double.infinity,
               child: FilledButton(
                 onPressed: _calculando ? null : _calcularFaltantesCombo,
-                child: Text(_calculando ? 'Calculando...' : 'Calcular faltantes'),
+                child: Text(
+                  _calculando ? 'Calculando...' : 'Calcular faltantes',
+                ),
               ),
             ),
             if (_errorCombo != null) ...[
@@ -291,7 +334,9 @@ class _ReporteReposicionPantallaState extends State<ReporteReposicionPantalla> {
 
   Widget _listaFaltantes() {
     if (_faltantesCombo.isEmpty) {
-      return const Center(child: Text('Sin faltantes (o todavía no calculaste)'));
+      return const Center(
+        child: Text('Sin faltantes (o todavia no calculaste)'),
+      );
     }
 
     return ListView.separated(
@@ -309,12 +354,12 @@ class _ReporteReposicionPantallaState extends State<ReporteReposicionPantalla> {
           child: ListTile(
             title: Text(nombre, maxLines: 1, overflow: TextOverflow.ellipsis),
             subtitle: Text(
-              'Req: ${requerido.toStringAsFixed(2)} $unidad  •  Stock: ${stock.toStringAsFixed(2)}',
+              'Req: ${Formatos.cantidad(requerido, unidad: unidad)} $unidad  -  Stock: ${Formatos.cantidad(stock, unidad: unidad)}',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
             trailing: Text(
-              '-${faltante.toStringAsFixed(2)}',
+              '-${Formatos.cantidad(faltante, unidad: unidad)}',
               style: TextStyle(color: Theme.of(context).colorScheme.error),
             ),
           ),
@@ -338,30 +383,24 @@ class _ReporteReposicionPantallaState extends State<ReporteReposicionPantalla> {
           );
         }
 
-        return Row(
-          children: [
-            SizedBox(
-              width: 360,
-              child: Column(
-                children: [
-                  _configCombo(),
-                  const SizedBox(height: 12),
-                  if (_comboNombre.trim().isNotEmpty)
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        _comboNombre,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.titleSmall,
-                      ),
-                    ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(child: _listaFaltantes()),
-          ],
+        return TabletMasterDetailLayout(
+          master: Column(
+            children: [
+              _configCombo(),
+              const SizedBox(height: 12),
+              if (_comboNombre.trim().isNotEmpty)
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    _comboNombre,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                ),
+            ],
+          ),
+          detail: _listaFaltantes(),
         );
       },
     );
@@ -369,7 +408,7 @@ class _ReporteReposicionPantallaState extends State<ReporteReposicionPantalla> {
 
   Widget _contenido(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.all(12),
+      padding: TabletMasterDetailLayout.kPagePadding,
       child: Column(
         children: [
           Row(
@@ -377,7 +416,7 @@ class _ReporteReposicionPantallaState extends State<ReporteReposicionPantalla> {
               Expanded(
                 child: SegmentedButton<int>(
                   segments: const [
-                    ButtonSegment(value: 0, label: Text('Por mínimo')),
+                    ButtonSegment(value: 0, label: Text('Por minimo')),
                     ButtonSegment(value: 1, label: Text('Por combo')),
                   ],
                   selected: {_modo},
@@ -419,7 +458,7 @@ class _ReporteReposicionPantallaState extends State<ReporteReposicionPantalla> {
     if (widget.embebido) return _contenido(context);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Reposición')),
+      appBar: AppBar(title: const Text('Reposicion')),
       body: _contenido(context),
     );
   }

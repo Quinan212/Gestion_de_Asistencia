@@ -2,12 +2,13 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
-import 'package:gestion_de_stock/aplicacion/utiles/formatos.dart';
-import 'package:gestion_de_stock/infraestructura/dep_inyeccion/proveedores.dart';
-import 'package:gestion_de_stock/modulos/combos/modelos/combo.dart';
-import 'package:gestion_de_stock/modulos/inventario/modelos/producto.dart';
-import 'package:gestion_de_stock/modulos/pedidos/datos/pedidos_repositorio.dart';
-import 'package:gestion_de_stock/modulos/pedidos/modelos/linea_pedido_tmp.dart';
+import 'package:gestion_de_asistencias/aplicacion/utiles/formatos.dart';
+import 'package:gestion_de_asistencias/aplicacion/utiles/validaciones.dart';
+import 'package:gestion_de_asistencias/infraestructura/dep_inyeccion/proveedores.dart';
+import 'package:gestion_de_asistencias/modulos/combos/modelos/combo.dart';
+import 'package:gestion_de_asistencias/modulos/inventario/modelos/producto.dart';
+import 'package:gestion_de_asistencias/modulos/pedidos/datos/pedidos_repositorio.dart';
+import 'package:gestion_de_asistencias/modulos/pedidos/modelos/linea_pedido_tmp.dart';
 
 Future<int?> showPedidoNuevoSheet(BuildContext context) {
   return showModalBottomSheet<int?>(
@@ -15,18 +16,27 @@ Future<int?> showPedidoNuevoSheet(BuildContext context) {
     isScrollControlled: true,
     useSafeArea: true,
     showDragHandle: true,
-    builder: (_) => const _PedidoNuevoSheet(),
+    builder: (_) => const PedidoNuevoPanel(),
   );
 }
 
-class _PedidoNuevoSheet extends StatefulWidget {
-  const _PedidoNuevoSheet();
+class PedidoNuevoPanel extends StatefulWidget {
+  final bool embebido;
+  final ValueChanged<int>? onCreado;
+  final VoidCallback? onCancelar;
+
+  const PedidoNuevoPanel({
+    super.key,
+    this.embebido = false,
+    this.onCreado,
+    this.onCancelar,
+  });
 
   @override
-  State<_PedidoNuevoSheet> createState() => _PedidoNuevoSheetState();
+  State<PedidoNuevoPanel> createState() => _PedidoNuevoPanelState();
 }
 
-class _PedidoNuevoSheetState extends State<_PedidoNuevoSheet> {
+class _PedidoNuevoPanelState extends State<PedidoNuevoPanel> {
   String _moneda = r'$';
 
   int _modo = 0; // 0 combo, 1 productos
@@ -56,8 +66,12 @@ class _PedidoNuevoSheetState extends State<_PedidoNuevoSheet> {
   @override
   void initState() {
     super.initState();
-    _combosF = Proveedores.combosRepositorio.listarCombos(incluirInactivos: false);
-    _productosF = Proveedores.inventarioRepositorio.listarProductos(incluirInactivos: true);
+    _combosF = Proveedores.combosRepositorio.listarCombos(
+      incluirInactivos: false,
+    );
+    _productosF = Proveedores.inventarioRepositorio.listarProductos(
+      incluirInactivos: true,
+    );
     _cargarMoneda();
   }
 
@@ -74,6 +88,14 @@ class _PedidoNuevoSheetState extends State<_PedidoNuevoSheet> {
     final m = await Formatos.leerMoneda();
     if (!mounted) return;
     setState(() => _moneda = m);
+  }
+
+  void _mostrarErrorValidacion(String mensaje) {
+    if (!mounted) return;
+    setState(() => _error = mensaje);
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(mensaje)));
   }
 
   double _num(String t) {
@@ -119,6 +141,32 @@ class _PedidoNuevoSheetState extends State<_PedidoNuevoSheet> {
 
   double _precioProducto(Producto p) => p.precioSugerido;
 
+  List<Producto> _basesProducto(List<Producto> productos) {
+    return productos.where((p) => p.productoPadreId == null).toList();
+  }
+
+  List<Producto> _variantesDeBase(List<Producto> productos, int? baseId) {
+    if (baseId == null) return const [];
+    return productos.where((p) => p.productoPadreId == baseId).toList();
+  }
+
+  Producto? _resolverProductoSeleccionado({
+    required List<Producto> productos,
+    required int? baseId,
+    required int? varianteId,
+  }) {
+    if (baseId == null) return null;
+    if (varianteId != null) {
+      for (final p in productos) {
+        if (p.id == varianteId) return p;
+      }
+    }
+    for (final p in productos) {
+      if (p.id == baseId) return p;
+    }
+    return null;
+  }
+
   Future<void> _recalcularMaxVendible() async {
     final id = _comboId;
     if (id == null) {
@@ -159,12 +207,14 @@ class _PedidoNuevoSheetState extends State<_PedidoNuevoSheet> {
             child: ListView.separated(
               shrinkWrap: true,
               itemCount: e.faltantes.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 8),
+              separatorBuilder: (context, index) => const SizedBox(height: 8),
               itemBuilder: (context, i) {
                 final f = e.faltantes[i];
                 final unidad = f.unidad.trim();
                 final u = unidad.isEmpty ? '' : ' $unidad';
-                return Text('Falta ${f.falta.toStringAsFixed(2)}$u de ${f.nombre}');
+                return Text(
+                  'Falta ${Formatos.cantidad(f.falta, unidad: unidad)}$u de ${f.nombre}',
+                );
               },
             ),
           ),
@@ -184,7 +234,12 @@ class _PedidoNuevoSheetState extends State<_PedidoNuevoSheet> {
     if (!mounted) return;
 
     int? productoId;
+    int? baseId;
+    int? varianteId;
     Producto? seleccionado;
+    final activos = productos.where((p) => p.activo).toList();
+    final bases = _basesProducto(activos);
+    List<Producto> variantes = const [];
 
     final cantidadCtrl = TextEditingController(text: '1');
     final precioCtrl = TextEditingController(text: '0');
@@ -202,50 +257,112 @@ class _PedidoNuevoSheetState extends State<_PedidoNuevoSheet> {
                 children: [
                   DropdownButtonFormField<int>(
                     isExpanded: true,
-                    initialValue: productoId,
-                    items: productos
-                        .where((p) => p.activo)
+                    initialValue: baseId,
+                    items: bases
                         .map(
                           (p) => DropdownMenuItem<int>(
-                        value: p.id,
-                        child: Row(
-                          children: [
-                            _miniaturaRuta(p.imagen),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                p.nombre,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
+                            value: p.id,
+                            child: Row(
+                              children: [
+                                _miniaturaRuta(p.imagen),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    p.nombreConVariante,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
                             ),
-                          ],
-                        ),
-                      ),
-                    )
+                          ),
+                        )
                         .toList(),
                     onChanged: (id) {
                       setStateLocal(() {
-                        productoId = id;
-                        seleccionado = (id == null) ? null : productos.firstWhere((x) => x.id == id);
+                        baseId = id;
+                        variantes = _variantesDeBase(activos, baseId);
+                        varianteId = null;
+                        seleccionado = _resolverProductoSeleccionado(
+                          productos: activos,
+                          baseId: baseId,
+                          varianteId: varianteId,
+                        );
+                        productoId = seleccionado?.id;
                         if (seleccionado != null) {
-                          precioCtrl.text = _precioProducto(seleccionado!).toStringAsFixed(2);
+                          precioCtrl.text = _precioProducto(
+                            seleccionado!,
+                          ).toStringAsFixed(2);
                         }
                       });
                     },
-                    decoration: const InputDecoration(labelText: 'Producto'),
+                    decoration: const InputDecoration(
+                      labelText: 'Producto base',
+                    ),
                   ),
+                  if (baseId != null && variantes.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<int>(
+                      isExpanded: true,
+                      initialValue: varianteId,
+                      items: variantes
+                          .map(
+                            (v) => DropdownMenuItem<int>(
+                              value: v.id,
+                              child: Row(
+                                children: [
+                                  _miniaturaRuta(v.imagen),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Text(
+                                      v.nombreConVariante,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (id) {
+                        setStateLocal(() {
+                          varianteId = id;
+                          seleccionado = _resolverProductoSeleccionado(
+                            productos: activos,
+                            baseId: baseId,
+                            varianteId: varianteId,
+                          );
+                          productoId = seleccionado?.id;
+                          if (seleccionado != null) {
+                            precioCtrl.text = _precioProducto(
+                              seleccionado!,
+                            ).toStringAsFixed(2);
+                          }
+                        });
+                      },
+                      decoration: const InputDecoration(
+                        labelText: 'Variante (opcional)',
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 12),
                   TextField(
                     controller: cantidadCtrl,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
                     decoration: const InputDecoration(labelText: 'Cantidad'),
                   ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: precioCtrl,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    decoration: InputDecoration(labelText: 'Precio unitario ($_moneda)'),
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    decoration: InputDecoration(
+                      labelText: 'Precio unitario ($_moneda)',
+                    ),
                   ),
                 ],
               );
@@ -266,14 +383,37 @@ class _PedidoNuevoSheetState extends State<_PedidoNuevoSheet> {
     );
 
     if (ok != true) return;
-    if (productoId == null) return;
+
+    final errProducto = AppValidaciones.validarSeleccion(
+      productoId,
+      campo: 'Producto',
+    );
+    if (errProducto != null) {
+      _mostrarErrorValidacion(errProducto);
+      return;
+    }
+
+    final errCant = AppValidaciones.validarNumeroMayorQueCero(
+      cantidadCtrl.text,
+      campo: 'Cantidad',
+    );
+    if (errCant != null) {
+      _mostrarErrorValidacion(errCant);
+      return;
+    }
+
+    final errPrecio = AppValidaciones.validarNumeroNoNegativo(
+      precioCtrl.text,
+      campo: 'Precio unitario',
+    );
+    if (errPrecio != null) {
+      _mostrarErrorValidacion(errPrecio);
+      return;
+    }
 
     final p = productos.firstWhere((x) => x.id == productoId);
-    final cant = _num(cantidadCtrl.text);
-    final precio = _num(precioCtrl.text);
-
-    if (cant <= 0) return;
-    if (precio < 0) return;
+    final cant = AppValidaciones.parseNumero(cantidadCtrl.text)!;
+    final precio = AppValidaciones.parseNumero(precioCtrl.text)!;
 
     if (!mounted) return;
     setState(() {
@@ -288,7 +428,7 @@ class _PedidoNuevoSheetState extends State<_PedidoNuevoSheet> {
         _lineas.add(
           LineaPedidoTmp(
             productoId: p.id,
-            nombre: p.nombre,
+            nombre: p.nombreConVariante,
             unidad: p.unidad,
             cantidad: cant,
             precioUnitario: precio,
@@ -298,18 +438,127 @@ class _PedidoNuevoSheetState extends State<_PedidoNuevoSheet> {
     });
   }
 
+  Future<void> _editarLineaRapida(int index) async {
+    if (_guardando || index < 0 || index >= _lineas.length) return;
+
+    final linea = _lineas[index];
+    final cantidadCtrl = TextEditingController(
+      text: linea.cantidad.toStringAsFixed(2),
+    );
+    final precioCtrl = TextEditingController(
+      text: linea.precioUnitario.toStringAsFixed(2),
+    );
+
+    final ok = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      builder: (context) {
+        final bottom = MediaQuery.of(context).viewInsets.bottom;
+        return Padding(
+          padding: EdgeInsets.fromLTRB(16, 8, 16, 16 + bottom),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                linea.nombre,
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: cantidadCtrl,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                decoration: InputDecoration(
+                  labelText: 'Cantidad (${linea.unidad})',
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: precioCtrl,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                decoration: InputDecoration(
+                  labelText: 'Precio unitario ($_moneda)',
+                ),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(context, false),
+                      child: const Text('Cancelar'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: FilledButton(
+                      onPressed: () => Navigator.pop(context, true),
+                      child: const Text('Guardar'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    if (ok != true) return;
+
+    final errCant = AppValidaciones.validarNumeroMayorQueCero(
+      cantidadCtrl.text,
+      campo: 'Cantidad',
+    );
+    if (errCant != null) {
+      _mostrarErrorValidacion(errCant);
+      return;
+    }
+
+    final errPrecio = AppValidaciones.validarNumeroNoNegativo(
+      precioCtrl.text,
+      campo: 'Precio unitario',
+    );
+    if (errPrecio != null) {
+      _mostrarErrorValidacion(errPrecio);
+      return;
+    }
+
+    final cant = AppValidaciones.parseNumero(cantidadCtrl.text)!;
+    final precio = AppValidaciones.parseNumero(precioCtrl.text)!;
+
+    setState(() {
+      if (index < 0 || index >= _lineas.length) return;
+      final actual = _lineas[index];
+      _lineas[index] = actual.copyWith(cantidad: cant, precioUnitario: precio);
+    });
+  }
+
   Future<void> _confirmar() async {
     if (_guardando) return;
 
     setState(() => _error = null);
 
     final cliente = _clienteCtrl.text.trim();
-    final envio = _montoEnvio;
-
-    if (_cobraEnvio && envio <= 0) {
-      setState(() => _error = 'El envío está activado, cargá un monto válido');
-      return;
+    if (_cobraEnvio) {
+      final errEnvio = AppValidaciones.validarNumeroMayorQueCero(
+        _envioCtrl.text,
+        campo: 'Monto envio',
+      );
+      if (errEnvio != null) {
+        setState(() => _error = errEnvio);
+        return;
+      }
     }
+    final envio = _montoEnvio;
 
     setState(() => _guardando = true);
 
@@ -319,56 +568,62 @@ class _PedidoNuevoSheetState extends State<_PedidoNuevoSheet> {
         if (id == null) {
           setState(() {
             _guardando = false;
-            _error = 'Elegí un combo';
+            _error = 'Combo: selecciona una opcion';
           });
           return;
         }
 
-        final cant = _num(_cantidadComboCtrl.text);
-        if (cant <= 0) {
+        final errCant = AppValidaciones.validarNumeroMayorQueCero(
+          _cantidadComboCtrl.text,
+          campo: 'Cantidad de combos',
+        );
+        if (errCant != null) {
           setState(() {
             _guardando = false;
-            _error = 'Cantidad inválida';
+            _error = errCant;
           });
           return;
         }
+        final cant = AppValidaciones.parseNumero(_cantidadComboCtrl.text)!;
 
-        final pedidoId = await Proveedores.pedidosRepositorio.crearPedidoPorCombo(
-          comboId: id,
-          cantidad: cant,
-          cliente: cliente.isEmpty ? null : cliente,
-          nota: _notaCtrl.text.trim().isEmpty ? null : _notaCtrl.text.trim(),
-          envioMonto: envio,
-          medioPago: _medioPago,
-          estadoPago: _estadoPago,
-          crearEnEncargadoYReservar: true,
-        );
+        final pedidoId = await Proveedores.pedidosRepositorio
+            .crearPedidoPorCombo(
+              comboId: id,
+              cantidad: cant,
+              cliente: cliente.isEmpty ? null : cliente,
+              nota: _notaCtrl.text.trim().isEmpty
+                  ? null
+                  : _notaCtrl.text.trim(),
+              envioMonto: envio,
+              medioPago: _medioPago,
+              estadoPago: _estadoPago,
+              crearEnEncargadoYReservar: true,
+            );
 
-        if (!mounted) return;
-        Navigator.pop(context, pedidoId);
+        await _finalizarCreacion(pedidoId);
         return;
       }
 
       if (_lineas.isEmpty) {
         setState(() {
           _guardando = false;
-          _error = 'Agregá al menos un producto';
+          _error = 'Agrega al menos un producto';
         });
         return;
       }
 
-      final pedidoId = await Proveedores.pedidosRepositorio.crearPedidoPorProductos(
-        lineas: _lineas,
-        cliente: cliente.isEmpty ? null : cliente,
-        nota: _notaCtrl.text.trim().isEmpty ? null : _notaCtrl.text.trim(),
-        envioMonto: envio,
-        medioPago: _medioPago,
-        estadoPago: _estadoPago,
-        crearEnEncargadoYReservar: true,
-      );
+      final pedidoId = await Proveedores.pedidosRepositorio
+          .crearPedidoPorProductos(
+            lineas: _lineas,
+            cliente: cliente.isEmpty ? null : cliente,
+            nota: _notaCtrl.text.trim().isEmpty ? null : _notaCtrl.text.trim(),
+            envioMonto: envio,
+            medioPago: _medioPago,
+            estadoPago: _estadoPago,
+            crearEnEncargadoYReservar: true,
+          );
 
-      if (!mounted) return;
-      Navigator.pop(context, pedidoId);
+      await _finalizarCreacion(pedidoId);
     } on StockInsuficientePedido catch (e) {
       if (!mounted) return;
       setState(() => _guardando = false);
@@ -382,6 +637,25 @@ class _PedidoNuevoSheetState extends State<_PedidoNuevoSheet> {
     }
   }
 
+  Future<void> _finalizarCreacion(int pedidoId) async {
+    if (!mounted) return;
+    Proveedores.notificarDatosActualizados();
+    if (widget.embebido && widget.onCreado != null) {
+      widget.onCreado!(pedidoId);
+      return;
+    }
+    Navigator.pop(context, pedidoId);
+  }
+
+  void _cerrarSinGuardar() {
+    if (_guardando) return;
+    if (widget.embebido) {
+      widget.onCancelar?.call();
+      return;
+    }
+    Navigator.pop(context);
+  }
+
   Widget _seccionDatos() {
     return Card(
       clipBehavior: Clip.antiAlias,
@@ -392,7 +666,9 @@ class _PedidoNuevoSheetState extends State<_PedidoNuevoSheet> {
             TextField(
               controller: _clienteCtrl,
               enabled: !_guardando,
-              decoration: const InputDecoration(labelText: 'Cliente (opcional)'),
+              decoration: const InputDecoration(
+                labelText: 'Cliente (opcional)',
+              ),
               textInputAction: TextInputAction.next,
             ),
             const SizedBox(height: 12),
@@ -401,9 +677,14 @@ class _PedidoNuevoSheetState extends State<_PedidoNuevoSheet> {
               items: const [
                 DropdownMenuItem(value: 'Efectivo', child: Text('Efectivo')),
                 DropdownMenuItem(value: 'Tarjeta', child: Text('Tarjeta')),
-                DropdownMenuItem(value: 'Transferencia', child: Text('Transferencia')),
+                DropdownMenuItem(
+                  value: 'Transferencia',
+                  child: Text('Transferencia'),
+                ),
               ],
-              onChanged: _guardando ? null : (v) => setState(() => _medioPago = v ?? 'Efectivo'),
+              onChanged: _guardando
+                  ? null
+                  : (v) => setState(() => _medioPago = v ?? 'Efectivo'),
               decoration: const InputDecoration(labelText: 'Medio de pago'),
             ),
             const SizedBox(height: 12),
@@ -414,39 +695,70 @@ class _PedidoNuevoSheetState extends State<_PedidoNuevoSheet> {
                 DropdownMenuItem(value: 'pagado', child: Text('Pagado')),
                 DropdownMenuItem(value: 'parcial', child: Text('Parcial')),
               ],
-              onChanged: _guardando ? null : (v) => setState(() => _estadoPago = v ?? 'pendiente'),
+              onChanged: _guardando
+                  ? null
+                  : (v) => setState(() => _estadoPago = v ?? 'pendiente'),
               decoration: const InputDecoration(labelText: 'Estado de pago'),
             ),
             const SizedBox(height: 12),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
-              title: const Text('Cobrar envío'),
+              title: const Text('Cobrar envio'),
               value: _cobraEnvio,
               onChanged: _guardando
                   ? null
                   : (v) {
-                setState(() {
-                  _cobraEnvio = v;
-                  if (!_cobraEnvio) {
-                    _envioCtrl.text = '0';
-                  } else {
-                    if (_envioCtrl.text.trim() == '0') _envioCtrl.clear();
-                  }
-                });
-              },
+                      setState(() {
+                        _cobraEnvio = v;
+                        if (!_cobraEnvio) {
+                          _envioCtrl.text = '0';
+                        } else {
+                          if (_envioCtrl.text.trim() == '0') _envioCtrl.clear();
+                        }
+                      });
+                    },
             ),
             if (_cobraEnvio) ...[
               const SizedBox(height: 12),
               TextField(
                 controller: _envioCtrl,
                 enabled: !_guardando,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: InputDecoration(labelText: 'Monto envío ($_moneda)'),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                decoration: InputDecoration(
+                  labelText: 'Monto envio ($_moneda)',
+                ),
               ),
             ],
           ],
         ),
       ),
+    );
+  }
+
+  Widget _seccionComboCargando() {
+    return Column(
+      children: [
+        const LinearProgressIndicator(),
+        const SizedBox(height: 12),
+        const TextField(
+          enabled: false,
+          decoration: InputDecoration(
+            labelText: 'Combo',
+            floatingLabelBehavior: FloatingLabelBehavior.always,
+          ),
+        ),
+        const SizedBox(height: 12),
+        const TextField(
+          enabled: false,
+          decoration: InputDecoration(
+            labelText: 'Cantidad de combos',
+            hintText: '1',
+            floatingLabelBehavior: FloatingLabelBehavior.always,
+          ),
+        ),
+      ],
     );
   }
 
@@ -458,54 +770,56 @@ class _PedidoNuevoSheetState extends State<_PedidoNuevoSheet> {
     final totalProd = _totalProductos;
     final totalFinal = (_modo == 1) ? (totalProd + envio) : null;
 
-    return Padding(
-      padding: EdgeInsets.fromLTRB(12, 8, 12, 12 + bottom),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
-            children: [
-              Text('Nuevo pedido', style: Theme.of(context).textTheme.titleLarge),
-              const Spacer(),
-              IconButton(
-                onPressed: _guardando ? null : () => Navigator.pop(context),
-                icon: const Icon(Icons.close),
-                tooltip: 'Cerrar',
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Expanded(
-            child: SingleChildScrollView(
-              child: Column(
-                children: [
-                  _seccionDatos(),
-                  const SizedBox(height: 12),
-                  SegmentedButton<int>(
-                    segments: const [
-                      ButtonSegment(value: 0, label: Text('Combo')),
-                      ButtonSegment(value: 1, label: Text('Productos')),
-                    ],
-                    selected: {_modo},
-                    onSelectionChanged: _guardando
-                        ? null
-                        : (s) {
-                      setState(() {
-                        _modo = s.first;
-                        _error = null;
-                      });
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  if (_modo == 0) ...[
-                    FutureBuilder<List<Combo>>(
+    final contenido = Column(
+      children: [
+        Row(
+          children: [
+            Text('Nuevo pedido', style: Theme.of(context).textTheme.titleLarge),
+            const Spacer(),
+            IconButton(
+              onPressed: _guardando ? null : _cerrarSinGuardar,
+              icon: const Icon(Icons.close),
+              tooltip: 'Cerrar',
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Expanded(
+          child: SingleChildScrollView(
+            child: Column(
+              children: [
+                _seccionDatos(),
+                const SizedBox(height: 12),
+                SegmentedButton<int>(
+                  segments: const [
+                    ButtonSegment(value: 0, label: Text('Combo')),
+                    ButtonSegment(value: 1, label: Text('Productos')),
+                  ],
+                  selected: {_modo},
+                  onSelectionChanged: _guardando
+                      ? null
+                      : (s) {
+                          setState(() {
+                            _modo = s.first;
+                            _error = null;
+                          });
+                        },
+                ),
+                const SizedBox(height: 12),
+                if (_modo == 0) ...[
+                  AnimatedSize(
+                    duration: const Duration(milliseconds: 140),
+                    curve: Curves.easeOut,
+                    child: FutureBuilder<List<Combo>>(
                       future: _combosF,
                       builder: (context, snap) {
                         if (snap.connectionState != ConnectionState.done) {
-                          return const LinearProgressIndicator();
+                          return _seccionComboCargando();
                         }
                         final combos = snap.data ?? [];
-                        if (combos.isEmpty) return const Text('Primero creá un combo');
+                        if (combos.isEmpty) {
+                          return const Text('Primero crea un combo');
+                        }
 
                         return Column(
                           children: [
@@ -515,25 +829,29 @@ class _PedidoNuevoSheetState extends State<_PedidoNuevoSheet> {
                               items: combos
                                   .map(
                                     (c) => DropdownMenuItem<int>(
-                                  value: c.id,
-                                  child: Text(
-                                    '${c.nombre} (${Formatos.dinero(_moneda, c.precioVenta)})',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              )
+                                      value: c.id,
+                                      child: Text(
+                                        '${c.nombre} (${Formatos.dinero(_moneda, c.precioVenta)})',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  )
                                   .toList(),
                               onChanged: _guardando
                                   ? null
                                   : (id) {
-                                setState(() => _comboId = id);
-                                // recalcular max después de setState
-                                WidgetsBinding.instance.addPostFrameCallback((_) {
-                                  _recalcularMaxVendible();
-                                });
-                              },
-                              decoration: const InputDecoration(labelText: 'Combo'),
+                                      setState(() => _comboId = id);
+                                      WidgetsBinding.instance
+                                          .addPostFrameCallback((_) {
+                                            _recalcularMaxVendible();
+                                          });
+                                    },
+                              decoration: const InputDecoration(
+                                labelText: 'Combo',
+                                floatingLabelBehavior:
+                                    FloatingLabelBehavior.always,
+                              ),
                             ),
                             const SizedBox(height: 10),
                             if (_comboId != null)
@@ -542,101 +860,166 @@ class _PedidoNuevoSheetState extends State<_PedidoNuevoSheet> {
                                 child: _cargandoMax
                                     ? const Text('Calculando stock...')
                                     : Text(
-                                  _maxVendible == null
-                                      ? 'Stock no disponible'
-                                      : 'Según stock, podés vender hasta $_maxVendible combos',
-                                ),
+                                        _maxVendible == null
+                                            ? 'Stock no disponible'
+                                            : 'Segun stock, podes vender hasta $_maxVendible combos',
+                                      ),
                               ),
                             const SizedBox(height: 12),
                             TextField(
                               controller: _cantidadComboCtrl,
                               enabled: !_guardando,
-                              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                              decoration: const InputDecoration(labelText: 'Cantidad de combos'),
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(
+                                    decimal: true,
+                                  ),
+                              decoration: const InputDecoration(
+                                labelText: 'Cantidad de combos',
+                                floatingLabelBehavior:
+                                    FloatingLabelBehavior.always,
+                              ),
                             ),
                           ],
                         );
                       },
                     ),
-                  ] else ...[
-                    SizedBox(
-                      width: double.infinity,
-                      child: FilledButton.icon(
-                        onPressed: _guardando ? null : _agregarProducto,
-                        icon: const Icon(Icons.add),
-                        label: const Text('Agregar producto'),
-                      ),
+                  ),
+                ] else ...[
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed: _guardando ? null : _agregarProducto,
+                      icon: const Icon(Icons.add),
+                      label: const Text('Agregar producto'),
                     ),
-                    const SizedBox(height: 12),
-                    if (_lineas.isEmpty)
-                      const Text('Agregá productos para armar el pedido')
-                    else
-                      ListView.separated(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        itemCount: _lineas.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 8),
-                        itemBuilder: (context, i) {
-                          final l = _lineas[i];
-                          final sub = l.cantidad * l.precioUnitario;
+                  ),
+                  const SizedBox(height: 12),
+                  if (_lineas.isEmpty)
+                    const Text('Agrega productos para armar el pedido')
+                  else
+                    ListView.separated(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: _lineas.length,
+                      separatorBuilder: (context, index) =>
+                          const SizedBox(height: 8),
+                      itemBuilder: (context, i) {
+                        final l = _lineas[i];
+                        final sub = l.cantidad * l.precioUnitario;
 
-                          return Card(
+                        return Dismissible(
+                          key: ValueKey('linea_pedido_${l.productoId}_$i'),
+                          direction: DismissDirection.endToStart,
+                          background: Container(
+                            alignment: Alignment.centerRight,
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            color: Theme.of(context).colorScheme.error,
+                            child: Icon(
+                              Icons.delete,
+                              color: Theme.of(context).colorScheme.onError,
+                            ),
+                          ),
+                          onDismissed: (_) {
+                            if (!mounted) return;
+                            setState(() => _lineas.removeAt(i));
+                          },
+                          child: Card(
                             clipBehavior: Clip.antiAlias,
                             child: ListTile(
                               leading: const Icon(Icons.inventory_2_outlined),
-                              title: Text(l.nombre, maxLines: 1, overflow: TextOverflow.ellipsis),
+                              title: Text(
+                                l.nombre,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
                               subtitle: Text(
-                                'Cant: ${l.cantidad.toStringAsFixed(2)} ${l.unidad}  •  PU: ${Formatos.dinero(_moneda, l.precioUnitario)}',
+                                'Cant: ${Formatos.cantidad(l.cantidad, unidad: l.unidad)} ${l.unidad}  -  PU: ${Formatos.dinero(_moneda, l.precioUnitario)}',
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
                               trailing: Text(Formatos.dinero(_moneda, sub)),
-                              onLongPress: _guardando ? null : () => setState(() => _lineas.removeAt(i)),
+                              onTap: _guardando
+                                  ? null
+                                  : () => _editarLineaRapida(i),
                             ),
-                          );
-                        },
-                      ),
-                    const SizedBox(height: 8),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text('Subtotal: ${Formatos.dinero(_moneda, totalProd)}'),
+                          ),
+                        );
+                      },
                     ),
-                  ],
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _notaCtrl,
-                    enabled: !_guardando,
-                    decoration: const InputDecoration(labelText: 'Nota (opcional)'),
-                  ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 8),
                   Align(
                     alignment: Alignment.centerLeft,
-                    child: Text(envio > 0 ? 'Envío: ${Formatos.dinero(_moneda, envio)}' : 'Envío: -'),
-                  ),
-                  if (totalFinal != null) ...[
-                    const SizedBox(height: 4),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text('Total estimado: ${Formatos.dinero(_moneda, totalFinal)}'),
+                    child: Text(
+                      'Subtotal: ${Formatos.dinero(_moneda, totalProd)}',
                     ),
-                  ],
+                  ),
                 ],
-              ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _notaCtrl,
+                  enabled: !_guardando,
+                  decoration: const InputDecoration(
+                    labelText: 'Nota (opcional)',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    envio > 0
+                        ? 'Envio: ${Formatos.dinero(_moneda, envio)}'
+                        : 'Envio: -',
+                  ),
+                ),
+                if (totalFinal != null) ...[
+                  const SizedBox(height: 4),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'Total estimado: ${Formatos.dinero(_moneda, totalFinal)}',
+                    ),
+                  ),
+                ],
+              ],
             ),
           ),
-          const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton(
-              onPressed: _guardando ? null : _confirmar,
-              child: Text(_guardando ? 'Guardando...' : 'Crear pedido (encargado)'),
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          width: double.infinity,
+          child: FilledButton(
+            onPressed: _guardando ? null : _confirmar,
+            child: Text(
+              _guardando ? 'Guardando...' : 'Crear pedido (encargado)',
             ),
           ),
-          if (_error != null) ...[
-            const SizedBox(height: 10),
-            Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
-          ],
+        ),
+        if (_error != null) ...[
+          const SizedBox(height: 10),
+          Text(
+            _error!,
+            style: TextStyle(color: Theme.of(context).colorScheme.error),
+          ),
         ],
+      ],
+    );
+
+    final pad = EdgeInsets.fromLTRB(
+      12,
+      12,
+      12,
+      widget.embebido ? 12 : 12 + bottom,
+    );
+
+    if (widget.embebido) {
+      return Padding(padding: pad, child: contenido);
+    }
+
+    return Padding(
+      padding: pad,
+      child: Card(
+        clipBehavior: Clip.antiAlias,
+        child: Padding(padding: const EdgeInsets.all(12), child: contenido),
       ),
     );
   }

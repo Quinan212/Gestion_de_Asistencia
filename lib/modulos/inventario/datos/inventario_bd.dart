@@ -12,6 +12,10 @@ class InventarioBd {
 
   Future<int> crearProducto({
     required String nombre,
+    String? sku,
+    int? productoPadreId,
+    String? variante,
+    String? subvariante,
     required String unidad,
     double costoActual = 0,
     double precioSugerido = 0,
@@ -19,22 +23,32 @@ class InventarioBd {
     String? proveedor,
     String? imagen,
   }) {
-    return _bd.into(_bd.tablaProductos).insert(
-      TablaProductosCompanion.insert(
-        nombre: nombre,
-        unidad: unidad,
-        costoActual: Value(costoActual),
-        precioSugerido: Value(precioSugerido),
-        stockMinimo: Value(stockMinimo),
-        proveedor: Value(proveedor),
-        imagen: Value(imagen),
-      ),
-    );
+    return _bd
+        .into(_bd.tablaProductos)
+        .insert(
+          TablaProductosCompanion.insert(
+            nombre: nombre,
+            sku: Value(_normalizarTextoOpcional(sku)),
+            productoPadreId: Value(_normalizarIdOpcional(productoPadreId)),
+            variante: Value(_normalizarTextoOpcional(variante)),
+            subvariante: Value(_normalizarTextoOpcional(subvariante)),
+            unidad: unidad,
+            costoActual: Value(costoActual),
+            precioSugerido: Value(precioSugerido),
+            stockMinimo: Value(stockMinimo),
+            proveedor: Value(proveedor),
+            imagen: Value(imagen),
+          ),
+        );
   }
 
   Future<void> actualizarProducto({
     required int id,
     required String nombre,
+    Value<String?> sku = const Value.absent(),
+    Value<int?> productoPadreId = const Value.absent(),
+    Value<String?> variante = const Value.absent(),
+    Value<String?> subvariante = const Value.absent(),
     required String unidad,
     required double costoActual,
     required double precioSugerido,
@@ -42,9 +56,23 @@ class InventarioBd {
     required String? proveedor,
     required bool activo,
   }) {
-    return (_bd.update(_bd.tablaProductos)..where((t) => t.id.equals(id))).write(
+    return (_bd.update(
+      _bd.tablaProductos,
+    )..where((t) => t.id.equals(id))).write(
       TablaProductosCompanion(
         nombre: Value(nombre),
+        sku: sku.present
+            ? Value(_normalizarTextoOpcional(sku.value))
+            : const Value.absent(),
+        productoPadreId: productoPadreId.present
+            ? Value(_normalizarIdOpcional(productoPadreId.value))
+            : const Value.absent(),
+        variante: variante.present
+            ? Value(_normalizarTextoOpcional(variante.value))
+            : const Value.absent(),
+        subvariante: subvariante.present
+            ? Value(_normalizarTextoOpcional(subvariante.value))
+            : const Value.absent(),
         unidad: Value(unidad),
         costoActual: Value(costoActual),
         precioSugerido: Value(precioSugerido),
@@ -59,24 +87,31 @@ class InventarioBd {
     required int id,
     required String? imagen,
   }) {
-    return (_bd.update(_bd.tablaProductos)..where((t) => t.id.equals(id))).write(
-      TablaProductosCompanion(imagen: Value(imagen)),
-    );
+    return (_bd.update(_bd.tablaProductos)..where((t) => t.id.equals(id)))
+        .write(TablaProductosCompanion(imagen: Value(imagen)));
   }
 
-  Future<List<Producto>> listarProductos({bool incluirInactivos = false}) async {
+  Future<List<Producto>> listarProductos({
+    bool incluirInactivos = false,
+  }) async {
     final consulta = _bd.select(_bd.tablaProductos);
     if (!incluirInactivos) {
       consulta.where((t) => t.activo.equals(true));
     }
-    consulta.orderBy([(t) => OrderingTerm.asc(t.nombre)]);
+    consulta.orderBy([
+      (t) => OrderingTerm.asc(t.nombre),
+      (t) => OrderingTerm.asc(t.variante),
+      (t) => OrderingTerm.asc(t.subvariante),
+      (t) => OrderingTerm.asc(t.sku),
+    ]);
     final filas = await consulta.get();
     return filas.map(_mapearProducto).toList();
   }
 
   Future<Producto?> obtenerProducto(int id) async {
-    final fila =
-    await (_bd.select(_bd.tablaProductos)..where((t) => t.id.equals(id))).getSingleOrNull();
+    final fila = await (_bd.select(
+      _bd.tablaProductos,
+    )..where((t) => t.id.equals(id))).getSingleOrNull();
     return fila == null ? null : _mapearProducto(fila);
   }
 
@@ -88,16 +123,18 @@ class InventarioBd {
     String? referencia,
     DateTime? fecha,
   }) {
-    return _bd.into(_bd.tablaMovimientos).insert(
-      TablaMovimientosCompanion.insert(
-        productoId: productoId,
-        tipo: tipo,
-        cantidad: cantidad,
-        nota: Value(nota),
-        referencia: Value(referencia),
-        fecha: fecha == null ? const Value.absent() : Value(fecha),
-      ),
-    );
+    return _bd
+        .into(_bd.tablaMovimientos)
+        .insert(
+          TablaMovimientosCompanion.insert(
+            productoId: productoId,
+            tipo: tipo,
+            cantidad: cantidad,
+            nota: Value(nota),
+            referencia: Value(referencia),
+            fecha: fecha == null ? const Value.absent() : Value(fecha),
+          ),
+        );
   }
 
   Future<List<Movimiento>> listarMovimientosDeProducto(int productoId) async {
@@ -109,9 +146,9 @@ class InventarioBd {
   }
 
   Future<double> calcularStockActual(int productoId) async {
-    final filas =
-    await (_bd.select(_bd.tablaMovimientos)..where((t) => t.productoId.equals(productoId)))
-        .get();
+    final filas = await (_bd.select(
+      _bd.tablaMovimientos,
+    )..where((t) => t.productoId.equals(productoId))).get();
 
     double total = 0;
     for (final m in filas) {
@@ -130,7 +167,9 @@ class InventarioBd {
   }
 
   // ---------------- NUEVO: batch ----------------
-  Future<Map<int, double>> calcularStockActualPorProductos(List<int> productoIds) async {
+  Future<Map<int, double>> calcularStockActualPorProductos(
+    List<int> productoIds,
+  ) async {
     final ids = productoIds.where((e) => e > 0).toSet().toList();
     if (ids.isEmpty) return {};
 
@@ -176,15 +215,19 @@ class InventarioBd {
     required int movimientoId,
     required String? nota,
   }) {
-    return (_bd.update(_bd.tablaMovimientos)..where((t) => t.id.equals(movimientoId))).write(
-      TablaMovimientosCompanion(nota: Value(nota)),
-    );
+    return (_bd.update(_bd.tablaMovimientos)
+          ..where((t) => t.id.equals(movimientoId)))
+        .write(TablaMovimientosCompanion(nota: Value(nota)));
   }
 
   Producto _mapearProducto(TablaProducto fila) {
     return Producto(
       id: fila.id,
       nombre: fila.nombre,
+      sku: fila.sku,
+      productoPadreId: fila.productoPadreId,
+      variante: fila.variante,
+      subvariante: fila.subvariante,
       unidad: fila.unidad,
       costoActual: fila.costoActual,
       precioSugerido: fila.precioSugerido,
@@ -194,6 +237,16 @@ class InventarioBd {
       activo: fila.activo,
       creadoEn: fila.creadoEn,
     );
+  }
+
+  String? _normalizarTextoOpcional(String? valor) {
+    final t = (valor ?? '').trim();
+    return t.isEmpty ? null : t;
+  }
+
+  int? _normalizarIdOpcional(int? valor) {
+    if (valor == null || valor <= 0) return null;
+    return valor;
   }
 
   Movimiento _mapearMovimiento(TablaMovimiento fila) {

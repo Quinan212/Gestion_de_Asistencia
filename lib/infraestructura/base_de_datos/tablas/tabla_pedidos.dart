@@ -23,6 +23,7 @@ class TablaPedidos extends Table {
 
   RealColumn get subtotal => real().withDefault(const Constant(0))();
   RealColumn get total => real().withDefault(const Constant(0))();
+  BoolColumn get stockDescontado => boolean().withDefault(const Constant(false))();
 
   IntColumn get ventaId => integer().nullable().references(TablaVentas, #id)();
 }

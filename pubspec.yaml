@@ -1,7 +1,7 @@
-name: gestion_de_stock
-description: "gestion_de_stock"
+name: gestion_de_asistencias
+description: "gestion_de_asistencias"
 publish_to: 'none'
-version: 1.3.26+5
+version: 1.3.726+726
 
 environment:
   sdk: ^3.11.0

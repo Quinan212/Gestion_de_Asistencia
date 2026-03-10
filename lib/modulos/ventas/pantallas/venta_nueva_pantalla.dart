@@ -4,10 +4,12 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:gestion_de_stock/aplicacion/utiles/formatos.dart';
-import 'package:gestion_de_stock/infraestructura/dep_inyeccion/proveedores.dart';
-import 'package:gestion_de_stock/modulos/combos/modelos/combo.dart';
-import 'package:gestion_de_stock/modulos/inventario/modelos/producto.dart';
+import 'package:gestion_de_asistencias/aplicacion/utiles/formatos.dart';
+import 'package:gestion_de_asistencias/aplicacion/utiles/layout_app.dart';
+import 'package:gestion_de_asistencias/aplicacion/utiles/validaciones.dart';
+import 'package:gestion_de_asistencias/infraestructura/dep_inyeccion/proveedores.dart';
+import 'package:gestion_de_asistencias/modulos/combos/modelos/combo.dart';
+import 'package:gestion_de_asistencias/modulos/inventario/modelos/producto.dart';
 
 class VentaNuevaPantalla extends StatefulWidget {
   const VentaNuevaPantalla({super.key});
@@ -17,7 +19,7 @@ class VentaNuevaPantalla extends StatefulWidget {
 }
 
 class _VentaNuevaPantallaState extends State<VentaNuevaPantalla> {
-  static const double _kTablet = 900;
+  static const double _kTablet = LayoutApp.kTablet;
   static const double _kMaxAnchoTablet = 620;
 
   int _modo = 0; // 0: combo, 1: productos
@@ -30,7 +32,7 @@ class _VentaNuevaPantallaState extends State<VentaNuevaPantalla> {
   final _cantidadCtrl = TextEditingController(text: '1');
   final _notaCtrl = TextEditingController();
 
-  // cliente, medio de pago, envío
+  // cliente, medio de pago, envio
   final _clienteCtrl = TextEditingController();
   bool _cobraEnvio = false;
   final _envioCtrl = TextEditingController(text: '0');
@@ -79,12 +81,22 @@ class _VentaNuevaPantallaState extends State<VentaNuevaPantalla> {
     super.dispose();
   }
 
-  Future<List<Combo>> _cargarCombos() => Proveedores.combosRepositorio.listarCombos();
+  void _mostrarErrorValidacion(String mensaje) {
+    if (!mounted) return;
+    setState(() => _error = mensaje);
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(mensaje)));
+  }
+
+  Future<List<Combo>> _cargarCombos() =>
+      Proveedores.combosRepositorio.listarCombos();
 
   Future<List<Producto>> _cargarProductos() =>
       Proveedores.inventarioRepositorio.listarProductos(incluirInactivos: true);
 
-  double _num(String t) => double.tryParse(t.trim().replaceAll(',', '.')) ?? 0.0;
+  double _num(String t) =>
+      double.tryParse(t.trim().replaceAll(',', '.')) ?? 0.0;
 
   double get _totalProductos {
     double t = 0;
@@ -106,12 +118,7 @@ class _VentaNuevaPantallaState extends State<VentaNuevaPantalla> {
     if (ok) {
       return ClipRRect(
         borderRadius: BorderRadius.circular(8),
-        child: Image.file(
-          File(r),
-          width: 34,
-          height: 34,
-          fit: BoxFit.cover,
-        ),
+        child: Image.file(File(r), width: 34, height: 34, fit: BoxFit.cover),
       );
     }
     return const Icon(Icons.image_outlined);
@@ -119,35 +126,69 @@ class _VentaNuevaPantallaState extends State<VentaNuevaPantalla> {
 
   Widget _miniaturaProducto(Producto p) => _miniaturaProductoPorRuta(p.imagen);
 
+  List<Producto> _basesProducto(List<Producto> productos) {
+    return productos.where((p) => p.productoPadreId == null).toList();
+  }
+
+  List<Producto> _variantesDeBase(List<Producto> productos, int? baseId) {
+    if (baseId == null) return const [];
+    return productos.where((p) => p.productoPadreId == baseId).toList();
+  }
+
+  Producto? _resolverProductoSeleccionado({
+    required List<Producto> productos,
+    required int? baseId,
+    required int? varianteId,
+  }) {
+    if (baseId == null) return null;
+    if (varianteId != null) {
+      for (final p in productos) {
+        if (p.id == varianteId) return p;
+      }
+    }
+    for (final p in productos) {
+      if (p.id == baseId) return p;
+    }
+    return null;
+  }
+
   Future<void> _editarLineaProducto(int index) async {
     final l = _lineas[index];
 
-    final cantidadCtrl = TextEditingController(text: l.cantidad.toStringAsFixed(2));
-    final precioCtrl = TextEditingController(text: l.precioUnitario.toStringAsFixed(2));
+    final cantidadCtrl = TextEditingController(
+      text: Formatos.cantidad(l.cantidad, unidad: l.unidad),
+    );
+    final precioCtrl = TextEditingController(
+      text: l.precioUnitario.toStringAsFixed(2),
+    );
 
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) {
         return AlertDialog(
           scrollable: true,
-          title: Text(
-            l.nombre,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
+          title: Text(l.nombre, maxLines: 1, overflow: TextOverflow.ellipsis),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               TextField(
                 controller: cantidadCtrl,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: InputDecoration(labelText: 'Cantidad (${l.unidad})'),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                decoration: InputDecoration(
+                  labelText: 'Cantidad (${l.unidad})',
+                ),
               ),
               const SizedBox(height: 12),
               TextField(
                 controller: precioCtrl,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: InputDecoration(labelText: 'Precio unitario ($_moneda)'),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                decoration: InputDecoration(
+                  labelText: 'Precio unitario ($_moneda)',
+                ),
               ),
             ],
           ),
@@ -167,11 +208,26 @@ class _VentaNuevaPantallaState extends State<VentaNuevaPantalla> {
 
     if (ok != true) return;
 
-    final cant = _num(cantidadCtrl.text);
-    final precio = _num(precioCtrl.text);
+    final errCant = AppValidaciones.validarNumeroMayorQueCero(
+      cantidadCtrl.text,
+      campo: 'Cantidad',
+    );
+    if (errCant != null) {
+      _mostrarErrorValidacion(errCant);
+      return;
+    }
 
-    if (cant <= 0) return;
-    if (precio < 0) return;
+    final errPrecio = AppValidaciones.validarNumeroNoNegativo(
+      precioCtrl.text,
+      campo: 'Precio unitario',
+    );
+    if (errPrecio != null) {
+      _mostrarErrorValidacion(errPrecio);
+      return;
+    }
+
+    final cant = AppValidaciones.parseNumero(cantidadCtrl.text)!;
+    final precio = AppValidaciones.parseNumero(precioCtrl.text)!;
 
     setState(() {
       _lineas[index] = l.copiarCon(cantidad: cant, precioUnitario: precio);
@@ -187,7 +243,9 @@ class _VentaNuevaPantallaState extends State<VentaNuevaPantalla> {
     if (comboId == null) return;
 
     try {
-      final componentes = await Proveedores.combosRepositorio.listarComponentes(comboId);
+      final componentes = await Proveedores.combosRepositorio.listarComponentes(
+        comboId,
+      );
       if (componentes.isEmpty) {
         if (!mounted) return;
         setState(() {
@@ -199,12 +257,15 @@ class _VentaNuevaPantallaState extends State<VentaNuevaPantalla> {
 
       double? cap;
       for (final c in componentes) {
-        final stock = await Proveedores.inventarioRepositorio.calcularStockActual(c.productoId);
+        final stock = await Proveedores.inventarioRepositorio
+            .calcularStockActual(c.productoId);
         final posible = stock / c.cantidad;
         cap = (cap == null) ? posible : (posible < cap ? posible : cap);
       }
 
-      final res = (cap == null || cap.isNaN || cap.isInfinite) ? 0.0 : cap.floorToDouble();
+      final res = (cap == null || cap.isNaN || cap.isInfinite)
+          ? 0.0
+          : cap.floorToDouble();
       if (!mounted) return;
 
       setState(() {
@@ -224,9 +285,14 @@ class _VentaNuevaPantallaState extends State<VentaNuevaPantalla> {
     required int comboId,
     required double cantidadCombos,
   }) async {
-    final componentes = await Proveedores.combosRepositorio.listarComponentes(comboId);
+    final componentes = await Proveedores.combosRepositorio.listarComponentes(
+      comboId,
+    );
     if (componentes.isEmpty) {
-      return (faltantes: <String>['El combo no tiene productos cargados'], maximoCombos: 0.0);
+      return (
+        faltantes: <String>['El combo no tiene productos cargados'],
+        maximoCombos: 0.0,
+      );
     }
 
     final productos = await Proveedores.inventarioRepositorio.listarProductos(
@@ -238,20 +304,24 @@ class _VentaNuevaPantallaState extends State<VentaNuevaPantalla> {
     double? maximo;
 
     for (final c in componentes) {
-      final stock = await Proveedores.inventarioRepositorio.calcularStockActual(c.productoId);
+      final stock = await Proveedores.inventarioRepositorio.calcularStockActual(
+        c.productoId,
+      );
 
       final posible = stock / c.cantidad;
-      maximo = (maximo == null) ? posible : (posible < maximo ? posible : maximo);
+      maximo = (maximo == null)
+          ? posible
+          : (posible < maximo ? posible : maximo);
 
       final requerido = c.cantidad * cantidadCombos;
       if (stock + 1e-9 < requerido) {
         final p = porId[c.productoId];
-        final nombre = p?.nombre ?? 'Producto ${c.productoId}';
+        final nombre = p?.nombreConVariante ?? 'Producto ${c.productoId}';
         final unidad = p?.unidad ?? '';
         final falta = requerido - stock;
 
         faltantes.add(
-          '$nombre: falta ${falta.toStringAsFixed(2)} $unidad (stock ${stock.toStringAsFixed(2)})',
+          '$nombre: falta ${Formatos.cantidad(falta, unidad: unidad)} $unidad (stock ${Formatos.cantidad(stock, unidad: unidad)})',
         );
       }
     }
@@ -264,7 +334,9 @@ class _VentaNuevaPantallaState extends State<VentaNuevaPantalla> {
   }
 
   Future<double> _costoEstimadoPorCombo(int comboId) async {
-    final componentes = await Proveedores.combosRepositorio.listarComponentes(comboId);
+    final componentes = await Proveedores.combosRepositorio.listarComponentes(
+      comboId,
+    );
     if (componentes.isEmpty) return 0.0;
 
     final productos = await Proveedores.inventarioRepositorio.listarProductos(
@@ -296,7 +368,9 @@ class _VentaNuevaPantallaState extends State<VentaNuevaPantalla> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Máximo que podés vender hoy: ${maximoCombos.toStringAsFixed(0)} combos'),
+                Text(
+                  'Maximo que podes vender hoy: ${maximoCombos.toStringAsFixed(0)} combos',
+                ),
                 const SizedBox(height: 12),
                 const Text('Faltantes:'),
                 const SizedBox(height: 8),
@@ -304,8 +378,9 @@ class _VentaNuevaPantallaState extends State<VentaNuevaPantalla> {
                   child: ListView.separated(
                     shrinkWrap: true,
                     itemCount: faltantes.length,
-                    separatorBuilder: (context, index) => const SizedBox(height: 8),
-                    itemBuilder: (context, i) => Text('• ${faltantes[i]}'),
+                    separatorBuilder: (context, index) =>
+                        const SizedBox(height: 8),
+                    itemBuilder: (context, i) => Text('- ${faltantes[i]}'),
                   ),
                 ),
               ],
@@ -333,29 +408,38 @@ class _VentaNuevaPantallaState extends State<VentaNuevaPantalla> {
   }) {
     final baseUsuario = (notaUsuario ?? '').trim();
 
-    final meta = <String>[
+    final metaLineas = <String>[
       if ((cliente ?? '').trim().isNotEmpty) 'Cliente: ${cliente!.trim()}',
       'Pago: $medioPago',
-      if (envio > 0) 'Envío: ${Formatos.dinero(_moneda, envio)}',
-    ].join(' • ');
+      if (envio > 0) 'Envio: ${Formatos.dinero(_moneda, envio)}',
+    ];
 
     final extra =
         'Costo estimado combo: ${Formatos.dinero(_moneda, costoCombo)}; '
         'Costo estimado total: ${Formatos.dinero(_moneda, costoTotal)}; '
         'Margen estimado: ${Formatos.dinero(_moneda, margenTotal)}';
 
-    if (baseUsuario.isEmpty) {
-      return meta.isEmpty ? extra : '$meta\n$extra';
-    }
-    return meta.isEmpty ? '$baseUsuario\n$extra' : '$meta\n$baseUsuario\n$extra';
+    final bloques = <String>[
+      ...metaLineas,
+      if (baseUsuario.isNotEmpty) baseUsuario,
+      extra,
+    ];
+
+    return bloques.join('\n');
   }
 
   Future<void> _agregarProductoALaVenta() async {
     final productos = await _cargarProductos();
     if (!mounted) return;
 
+    final activos = productos.where((p) => p.activo).toList();
+    final bases = _basesProducto(activos);
+
     int? productoId;
+    int? baseId;
+    int? varianteId;
     Producto? seleccionado;
+    List<Producto> variantes = const [];
 
     final cantidadCtrl = TextEditingController(text: '1');
     final precioCtrl = TextEditingController(text: '0');
@@ -364,14 +448,18 @@ class _VentaNuevaPantallaState extends State<VentaNuevaPantalla> {
     bool cargandoStock = false;
     String? aviso;
 
-    Future<void> cargarStock(Producto p, void Function(void Function()) setStateLocal) async {
+    Future<void> cargarStock(
+      Producto p,
+      void Function(void Function()) setStateLocal,
+    ) async {
       setStateLocal(() {
         cargandoStock = true;
         stockActual = null;
         aviso = null;
       });
       try {
-        final stock = await Proveedores.inventarioRepositorio.calcularStockActual(p.id);
+        final stock = await Proveedores.inventarioRepositorio
+            .calcularStockActual(p.id);
         setStateLocal(() {
           stockActual = stock;
           cargandoStock = false;
@@ -398,65 +486,102 @@ class _VentaNuevaPantallaState extends State<VentaNuevaPantalla> {
                 children: [
                   DropdownButtonFormField<int>(
                     isExpanded: true,
-                    initialValue: productoId,
-                    items: productos
-                        .where((p) => p.activo)
+                    initialValue: baseId,
+                    items: bases
                         .map(
                           (p) => DropdownMenuItem<int>(
-                        value: p.id,
-                        child: Row(
-                          children: [
-                            _miniaturaProducto(p),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                p.nombre,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    )
-                        .toList(),
-                    selectedItemBuilder: (context) {
-                      return productos.where((p) => p.activo).map((p) {
-                        return Align(
-                          alignment: Alignment.centerLeft,
-                          child: Row(
-                            children: [
-                              _miniaturaProducto(p),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Text(
-                                  p.nombre,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
+                            value: p.id,
+                            child: Row(
+                              children: [
+                                _miniaturaProducto(p),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    p.nombreConVariante,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
-                        );
-                      }).toList();
-                    },
+                        )
+                        .toList(),
                     onChanged: _guardando
                         ? null
                         : (id) async {
-                      setStateLocal(() {
-                        productoId = id;
-                        seleccionado =
-                        (id == null) ? null : productos.firstWhere((x) => x.id == id);
-                        aviso = null;
-                      });
+                            setStateLocal(() {
+                              baseId = id;
+                              variantes = _variantesDeBase(activos, baseId);
+                              varianteId = null;
+                              seleccionado = _resolverProductoSeleccionado(
+                                productos: activos,
+                                baseId: baseId,
+                                varianteId: varianteId,
+                              );
+                              productoId = seleccionado?.id;
+                              aviso = null;
+                            });
 
-                      if (seleccionado != null) {
-                        precioCtrl.text = seleccionado!.precioSugerido.toStringAsFixed(2);
-                        await cargarStock(seleccionado!, setStateLocal);
-                      }
-                    },
-                    decoration: const InputDecoration(labelText: 'Producto'),
+                            if (seleccionado != null) {
+                              precioCtrl.text = seleccionado!.precioSugerido
+                                  .toStringAsFixed(2);
+                              await cargarStock(seleccionado!, setStateLocal);
+                            }
+                          },
+                    decoration: const InputDecoration(
+                      labelText: 'Producto base',
+                    ),
                   ),
+                  if (baseId != null && variantes.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<int>(
+                      isExpanded: true,
+                      initialValue: varianteId,
+                      items: variantes
+                          .map(
+                            (p) => DropdownMenuItem<int>(
+                              value: p.id,
+                              child: Row(
+                                children: [
+                                  _miniaturaProducto(p),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Text(
+                                      p.nombreConVariante,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: _guardando
+                          ? null
+                          : (id) async {
+                              setStateLocal(() {
+                                varianteId = id;
+                                seleccionado = _resolverProductoSeleccionado(
+                                  productos: activos,
+                                  baseId: baseId,
+                                  varianteId: varianteId,
+                                );
+                                productoId = seleccionado?.id;
+                                aviso = null;
+                              });
+                              if (seleccionado != null) {
+                                precioCtrl.text = seleccionado!.precioSugerido
+                                    .toStringAsFixed(2);
+                                await cargarStock(seleccionado!, setStateLocal);
+                              }
+                            },
+                      decoration: const InputDecoration(
+                        labelText: 'Variante (opcional)',
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 12),
                   if (seleccionado != null) ...[
                     if (cargandoStock)
@@ -468,7 +593,7 @@ class _VentaNuevaPantallaState extends State<VentaNuevaPantalla> {
                       Align(
                         alignment: Alignment.centerLeft,
                         child: Text(
-                          'Stock actual: ${(stockActual ?? 0).toStringAsFixed(2)} ${seleccionado!.unidad}',
+                          'Stock actual: ${Formatos.cantidad((stockActual ?? 0), unidad: seleccionado!.unidad)} ${seleccionado!.unidad}',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -477,7 +602,9 @@ class _VentaNuevaPantallaState extends State<VentaNuevaPantalla> {
                   ],
                   TextField(
                     controller: cantidadCtrl,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
                     decoration: const InputDecoration(labelText: 'Cantidad'),
                     onChanged: (t) {
                       final cant = _num(t);
@@ -496,8 +623,12 @@ class _VentaNuevaPantallaState extends State<VentaNuevaPantalla> {
                   const SizedBox(height: 12),
                   TextField(
                     controller: precioCtrl,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    decoration: InputDecoration(labelText: 'Precio unitario ($_moneda)'),
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    decoration: InputDecoration(
+                      labelText: 'Precio unitario ($_moneda)',
+                    ),
                   ),
                   if (aviso != null) ...[
                     const SizedBox(height: 12),
@@ -505,7 +636,9 @@ class _VentaNuevaPantallaState extends State<VentaNuevaPantalla> {
                       alignment: Alignment.centerLeft,
                       child: Text(
                         aviso!,
-                        style: TextStyle(color: Theme.of(context).colorScheme.error),
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.error,
+                        ),
                       ),
                     ),
                   ],
@@ -528,14 +661,37 @@ class _VentaNuevaPantallaState extends State<VentaNuevaPantalla> {
     );
 
     if (ok != true) return;
-    if (productoId == null) return;
+
+    final errProducto = AppValidaciones.validarSeleccion(
+      productoId,
+      campo: 'Producto',
+    );
+    if (errProducto != null) {
+      _mostrarErrorValidacion(errProducto);
+      return;
+    }
+
+    final errCant = AppValidaciones.validarNumeroMayorQueCero(
+      cantidadCtrl.text,
+      campo: 'Cantidad',
+    );
+    if (errCant != null) {
+      _mostrarErrorValidacion(errCant);
+      return;
+    }
+
+    final errPrecio = AppValidaciones.validarNumeroNoNegativo(
+      precioCtrl.text,
+      campo: 'Precio unitario',
+    );
+    if (errPrecio != null) {
+      _mostrarErrorValidacion(errPrecio);
+      return;
+    }
 
     final p = productos.firstWhere((x) => x.id == productoId);
-    final cant = _num(cantidadCtrl.text);
-    final precio = _num(precioCtrl.text);
-
-    if (cant <= 0) return;
-    if (precio < 0) return;
+    final cant = AppValidaciones.parseNumero(cantidadCtrl.text)!;
+    final precio = AppValidaciones.parseNumero(precioCtrl.text)!;
 
     if (stockActual != null && cant > (stockActual! + 1e-9)) {
       if (!mounted) return;
@@ -557,7 +713,7 @@ class _VentaNuevaPantallaState extends State<VentaNuevaPantalla> {
         _lineas.add(
           _LineaProductoTmp(
             productoId: p.id,
-            nombre: p.nombre,
+            nombre: p.nombreConVariante,
             unidad: p.unidad,
             cantidad: cant,
             precioUnitario: precio,
@@ -601,11 +757,17 @@ class _VentaNuevaPantallaState extends State<VentaNuevaPantalla> {
     setState(() => _error = null);
 
     final cliente = _clienteCtrl.text.trim();
-    final envio = _montoEnvio;
-    if (_cobraEnvio && envio <= 0) {
-      setState(() => _error = 'El envío está activado, cargá un monto válido');
-      return;
+    if (_cobraEnvio) {
+      final errEnvio = AppValidaciones.validarNumeroMayorQueCero(
+        _envioCtrl.text,
+        campo: 'Monto envio',
+      );
+      if (errEnvio != null) {
+        setState(() => _error = errEnvio);
+        return;
+      }
     }
+    final envio = _montoEnvio;
 
     setState(() => _guardando = true);
 
@@ -618,28 +780,31 @@ class _VentaNuevaPantallaState extends State<VentaNuevaPantalla> {
         if (id == null) {
           setState(() {
             _guardando = false;
-            _error = 'Elegí un combo';
+            _error = 'Combo: selecciona una opcion';
           });
           return;
         }
 
-        final cantTxt = _cantidadCtrl.text.trim().replaceAll(',', '.');
-        final cant = double.tryParse(cantTxt);
-        if (cant == null || cant <= 0) {
+        final errCant = AppValidaciones.validarNumeroMayorQueCero(
+          _cantidadCtrl.text,
+          campo: 'Cantidad de combos',
+        );
+        if (errCant != null) {
           setState(() {
             _guardando = false;
-            _error = 'Cantidad inválida';
+            _error = errCant;
           });
           return;
         }
 
+        final cant = AppValidaciones.parseNumero(_cantidadCtrl.text)!;
         comboId = id;
         cantidadCombos = cant;
       } else {
         if (_lineas.isEmpty) {
           setState(() {
             _guardando = false;
-            _error = 'Agregá al menos un producto';
+            _error = 'Agrega al menos un producto';
           });
           return;
         }
@@ -656,7 +821,10 @@ class _VentaNuevaPantallaState extends State<VentaNuevaPantalla> {
         return;
       }
 
-      final analisis = await _analizarStock(comboId: comboId, cantidadCombos: cantidadCombos);
+      final analisis = await _analizarStock(
+        comboId: comboId,
+        cantidadCombos: cantidadCombos,
+      );
       if (analisis.faltantes.isNotEmpty) {
         if (!mounted) return;
         setState(() => _guardando = false);
@@ -675,7 +843,9 @@ class _VentaNuevaPantallaState extends State<VentaNuevaPantalla> {
       final margenTotal = subtotal - costoTotal;
 
       var notaFinal = _armarNotaFinal(
-        notaUsuario: _notaCtrl.text.trim().isEmpty ? null : _notaCtrl.text.trim(),
+        notaUsuario: _notaCtrl.text.trim().isEmpty
+            ? null
+            : _notaCtrl.text.trim(),
         costoCombo: costoCombo,
         costoTotal: costoTotal,
         margenTotal: margenTotal,
@@ -705,7 +875,9 @@ class _VentaNuevaPantallaState extends State<VentaNuevaPantalla> {
         total: total,
       );
 
-      final componentes = await Proveedores.combosRepositorio.listarComponentes(combo.id);
+      final componentes = await Proveedores.combosRepositorio.listarComponentes(
+        combo.id,
+      );
       for (final c in componentes) {
         await Proveedores.inventarioRepositorio.crearMovimiento(
           productoId: c.productoId,
@@ -717,6 +889,7 @@ class _VentaNuevaPantallaState extends State<VentaNuevaPantalla> {
       }
 
       if (!mounted) return;
+      Proveedores.notificarDatosActualizados();
       Navigator.pop(context);
     } catch (_) {
       if (!mounted) return;
@@ -743,45 +916,52 @@ class _VentaNuevaPantallaState extends State<VentaNuevaPantalla> {
             ),
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
-              value: _medioPago,
+              initialValue: _medioPago,
               items: const [
                 DropdownMenuItem(value: 'Efectivo', child: Text('Efectivo')),
                 DropdownMenuItem(value: 'Tarjeta', child: Text('Tarjeta')),
-                DropdownMenuItem(value: 'Transferencia', child: Text('Transferencia')),
+                DropdownMenuItem(
+                  value: 'Transferencia',
+                  child: Text('Transferencia'),
+                ),
               ],
               onChanged: _guardando
                   ? null
                   : (v) {
-                setState(() => _medioPago = v ?? 'Efectivo');
-              },
+                      setState(() => _medioPago = v ?? 'Efectivo');
+                    },
               decoration: const InputDecoration(labelText: 'Medio de pago'),
             ),
             const SizedBox(height: 12),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
-              title: const Text('Cobrar envío'),
+              title: const Text('Cobrar envio'),
               value: _cobraEnvio,
               onChanged: _guardando
                   ? null
                   : (v) {
-                setState(() {
-                  _cobraEnvio = v;
+                      setState(() {
+                        _cobraEnvio = v;
 
-                  if (!_cobraEnvio) {
-                    _envioCtrl.text = '0';
-                  } else {
-                    if (_envioCtrl.text.trim() == '0') _envioCtrl.clear();
-                  }
-                });
-              },
+                        if (!_cobraEnvio) {
+                          _envioCtrl.text = '0';
+                        } else {
+                          if (_envioCtrl.text.trim() == '0') _envioCtrl.clear();
+                        }
+                      });
+                    },
             ),
             if (_cobraEnvio) ...[
               const SizedBox(height: 12),
               TextField(
                 controller: _envioCtrl,
                 enabled: !_guardando,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: InputDecoration(labelText: 'Monto envío ($_moneda)'),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                decoration: InputDecoration(
+                  labelText: 'Monto envio ($_moneda)',
+                ),
               ),
             ],
           ],
@@ -813,13 +993,13 @@ class _VentaNuevaPantallaState extends State<VentaNuevaPantalla> {
             onSelectionChanged: _guardando
                 ? null
                 : (s) {
-              setState(() {
-                _modo = s.first;
-                _error = null;
-                _capacidad = null;
-                _calculandoCapacidad = false;
-              });
-            },
+                    setState(() {
+                      _modo = s.first;
+                      _error = null;
+                      _capacidad = null;
+                      _calculandoCapacidad = false;
+                    });
+                  },
           ),
           const SizedBox(height: 12),
           if (_modo == 0) ...[
@@ -830,7 +1010,7 @@ class _VentaNuevaPantallaState extends State<VentaNuevaPantalla> {
                   return const LinearProgressIndicator();
                 }
                 final combos = snap.data ?? [];
-                if (combos.isEmpty) return const Text('Primero creá un combo');
+                if (combos.isEmpty) return const Text('Primero crea un combo');
 
                 return Column(
                   children: [
@@ -840,14 +1020,14 @@ class _VentaNuevaPantallaState extends State<VentaNuevaPantalla> {
                       items: combos
                           .map(
                             (c) => DropdownMenuItem<int>(
-                          value: c.id,
-                          child: Text(
-                            '${c.nombre} (${Formatos.dinero(_moneda, c.precioVenta)})',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      )
+                              value: c.id,
+                              child: Text(
+                                '${c.nombre} (${Formatos.dinero(_moneda, c.precioVenta)})',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          )
                           .toList(),
                       selectedItemBuilder: (context) {
                         return combos.map((c) {
@@ -864,9 +1044,9 @@ class _VentaNuevaPantallaState extends State<VentaNuevaPantalla> {
                       onChanged: _guardando
                           ? null
                           : (id) {
-                        setState(() => _comboId = id);
-                        _recalcularCapacidad(id);
-                      },
+                              setState(() => _comboId = id);
+                              _recalcularCapacidad(id);
+                            },
                       decoration: const InputDecoration(labelText: 'Combo'),
                     ),
                     const SizedBox(height: 8),
@@ -879,7 +1059,7 @@ class _VentaNuevaPantallaState extends State<VentaNuevaPantalla> {
                       Align(
                         alignment: Alignment.centerLeft,
                         child: Text(
-                          'Podés vender hasta: ${_capacidad!.toStringAsFixed(0)} combos',
+                          'Podes vender hasta: ${_capacidad!.toStringAsFixed(0)} combos',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -892,8 +1072,12 @@ class _VentaNuevaPantallaState extends State<VentaNuevaPantalla> {
             TextField(
               controller: _cantidadCtrl,
               enabled: !_guardando,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(labelText: 'Cantidad de combos'),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              decoration: const InputDecoration(
+                labelText: 'Cantidad de combos',
+              ),
             ),
           ] else ...[
             SizedBox(
@@ -906,7 +1090,7 @@ class _VentaNuevaPantallaState extends State<VentaNuevaPantalla> {
             ),
             const SizedBox(height: 12),
             if (_lineas.isEmpty)
-              const Text('Agregá productos para armar la venta')
+              const Text('Agrega productos para armar la venta')
             else
               ListView.separated(
                 shrinkWrap: true,
@@ -926,8 +1110,8 @@ class _VentaNuevaPantallaState extends State<VentaNuevaPantalla> {
                         overflow: TextOverflow.ellipsis,
                       ),
                       subtitle: Text(
-                        'Cant: ${l.cantidad.toStringAsFixed(2)} ${l.unidad}  •  '
-                            'PU: ${Formatos.dinero(_moneda, l.precioUnitario)}',
+                        'Cant: ${Formatos.cantidad(l.cantidad, unidad: l.unidad)} ${l.unidad}  |  '
+                        'PU: ${Formatos.dinero(_moneda, l.precioUnitario)}',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -936,8 +1120,8 @@ class _VentaNuevaPantallaState extends State<VentaNuevaPantalla> {
                       onLongPress: _guardando
                           ? null
                           : () {
-                        setState(() => _lineas.removeAt(i));
-                      },
+                              setState(() => _lineas.removeAt(i));
+                            },
                     ),
                   );
                 },
@@ -945,12 +1129,14 @@ class _VentaNuevaPantallaState extends State<VentaNuevaPantalla> {
             const SizedBox(height: 8),
             Align(
               alignment: Alignment.centerLeft,
-              child: Text('Subtotal: ${Formatos.dinero(_moneda, _totalProductos)}'),
+              child: Text(
+                'Subtotal: ${Formatos.dinero(_moneda, _totalProductos)}',
+              ),
             ),
             const SizedBox(height: 4),
             const Align(
               alignment: Alignment.centerLeft,
-              child: Text('Tip: mantené apretado un producto para quitarlo'),
+              child: Text('Tip: mantene apretado un producto para quitarlo'),
             ),
           ],
           const SizedBox(height: 12),
@@ -963,7 +1149,9 @@ class _VentaNuevaPantallaState extends State<VentaNuevaPantalla> {
           Align(
             alignment: Alignment.centerLeft,
             child: Text(
-              envio > 0 ? 'Envío: ${Formatos.dinero(_moneda, envio)}' : 'Envío: -',
+              envio > 0
+                  ? 'Envio: ${Formatos.dinero(_moneda, envio)}'
+                  : 'Envio: -',
             ),
           ),
           const SizedBox(height: 4),
@@ -1012,9 +1200,7 @@ class _VentaNuevaPantallaState extends State<VentaNuevaPantalla> {
 
         return Scaffold(
           appBar: AppBar(title: const Text('Nueva venta')),
-          body: SafeArea(
-            child: _contenido(context, esTablet: esTablet),
-          ),
+          body: SafeArea(child: _contenido(context, esTablet: esTablet)),
         );
       },
     );
@@ -1038,7 +1224,11 @@ class _LineaProductoTmp {
     required this.imagen,
   });
 
-  _LineaProductoTmp copiarCon({double? cantidad, double? precioUnitario, String? imagen}) {
+  _LineaProductoTmp copiarCon({
+    double? cantidad,
+    double? precioUnitario,
+    String? imagen,
+  }) {
     return _LineaProductoTmp(
       productoId: productoId,
       nombre: nombre,

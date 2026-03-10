@@ -1,4 +1,6 @@
 // lib/modulos/inventario/datos/inventario_repositorio.dart
+import 'package:drift/drift.dart';
+
 import '/infraestructura/base_de_datos/base_de_datos.dart';
 import 'inventario_bd.dart';
 import '../modelos/producto.dart';
@@ -7,10 +9,15 @@ import '../modelos/movimiento.dart';
 class InventarioRepositorio {
   final InventarioBd _bd;
 
-  InventarioRepositorio(BaseDeDatos baseDeDatos) : _bd = InventarioBd(baseDeDatos);
+  InventarioRepositorio(BaseDeDatos baseDeDatos)
+    : _bd = InventarioBd(baseDeDatos);
 
   Future<int> crearProducto({
     required String nombre,
+    String? sku,
+    int? productoPadreId,
+    String? variante,
+    String? subvariante,
     required String unidad,
     double costoActual = 0,
     double precioSugerido = 0,
@@ -20,6 +27,10 @@ class InventarioRepositorio {
   }) {
     return _bd.crearProducto(
       nombre: nombre,
+      sku: sku,
+      productoPadreId: productoPadreId,
+      variante: variante,
+      subvariante: subvariante,
       unidad: unidad,
       costoActual: costoActual,
       precioSugerido: precioSugerido,
@@ -32,6 +43,10 @@ class InventarioRepositorio {
   Future<void> actualizarProducto({
     required int id,
     required String nombre,
+    Value<String?> sku = const Value.absent(),
+    Value<int?> productoPadreId = const Value.absent(),
+    Value<String?> variante = const Value.absent(),
+    Value<String?> subvariante = const Value.absent(),
     required String unidad,
     required double costoActual,
     required double precioSugerido,
@@ -42,6 +57,10 @@ class InventarioRepositorio {
     return _bd.actualizarProducto(
       id: id,
       nombre: nombre,
+      sku: sku,
+      productoPadreId: productoPadreId,
+      variante: variante,
+      subvariante: subvariante,
       unidad: unidad,
       costoActual: costoActual,
       precioSugerido: precioSugerido,
@@ -51,7 +70,10 @@ class InventarioRepositorio {
     );
   }
 
-  Future<void> actualizarImagenProducto({required int id, required String? imagen}) {
+  Future<void> actualizarImagenProducto({
+    required int id,
+    required String? imagen,
+  }) {
     return _bd.actualizarImagenProducto(id: id, imagen: imagen);
   }
 
@@ -89,11 +111,16 @@ class InventarioRepositorio {
   }
 
   /// NUEVO: stock batch para N productos
-  Future<Map<int, double>> calcularStockActualPorProductos(List<int> productoIds) {
+  Future<Map<int, double>> calcularStockActualPorProductos(
+    List<int> productoIds,
+  ) {
     return _bd.calcularStockActualPorProductos(productoIds);
   }
 
-  Future<void> actualizarNotaMovimiento({required int movimientoId, required String? nota}) {
+  Future<void> actualizarNotaMovimiento({
+    required int movimientoId,
+    required String? nota,
+  }) {
     return _bd.actualizarNotaMovimiento(movimientoId: movimientoId, nota: nota);
   }
 }

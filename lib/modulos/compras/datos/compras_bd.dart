@@ -20,6 +20,7 @@ class ComprasBd {
 
   Future<int> crearCompra({
     String? proveedor,
+    double envioMonto = 0,
     double total = 0,
     String? nota,
     DateTime? fecha,
@@ -27,6 +28,7 @@ class ComprasBd {
     return _bd.into(_bd.tablaCompras).insert(
       TablaComprasCompanion.insert(
         proveedor: Value(proveedor),
+        envioMonto: Value(envioMonto),
         total: Value(total),
         nota: Value(nota),
         fecha: fecha == null ? const Value.absent() : Value(fecha),
@@ -75,6 +77,7 @@ class ComprasBd {
         id: fila.id,
         fecha: fila.fecha,
         proveedor: fila.proveedor,
+        envioMonto: fila.envioMonto,
         total: fila.total,
         nota: fila.nota,
       ),
@@ -91,6 +94,7 @@ class ComprasBd {
       id: fila.id,
       fecha: fila.fecha,
       proveedor: fila.proveedor,
+      envioMonto: fila.envioMonto,
       total: fila.total,
       nota: fila.nota,
     );

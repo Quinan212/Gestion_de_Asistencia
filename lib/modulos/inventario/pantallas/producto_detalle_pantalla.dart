@@ -1,12 +1,15 @@
 // lib/modulos/inventario/pantallas/producto_detalle_pantalla.dart
 import 'dart:io';
 
+import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
-import 'package:gestion_de_stock/aplicacion/utiles/formatos.dart';
-import 'package:gestion_de_stock/infraestructura/dep_inyeccion/proveedores.dart';
-import 'package:gestion_de_stock/infraestructura/servicios/fotos_producto.dart';
-import 'package:gestion_de_stock/modulos/inventario/modelos/producto.dart';
-import 'package:gestion_de_stock/modulos/inventario/modelos/movimiento.dart';
+import 'package:gestion_de_asistencias/aplicacion/utiles/layout_app.dart';
+import 'package:gestion_de_asistencias/aplicacion/widgets/tablet_master_detail_layout.dart';
+import 'package:gestion_de_asistencias/aplicacion/utiles/formatos.dart';
+import 'package:gestion_de_asistencias/infraestructura/dep_inyeccion/proveedores.dart';
+import 'package:gestion_de_asistencias/infraestructura/servicios/fotos_producto.dart';
+import 'package:gestion_de_asistencias/modulos/inventario/modelos/producto.dart';
+import 'package:gestion_de_asistencias/modulos/inventario/modelos/movimiento.dart';
 import 'movimiento_nuevo_pantalla.dart';
 
 class ProductoDetallePantalla extends StatefulWidget {
@@ -15,22 +18,29 @@ class ProductoDetallePantalla extends StatefulWidget {
   const ProductoDetallePantalla({super.key, required this.productoId});
 
   @override
-  State<ProductoDetallePantalla> createState() => _ProductoDetallePantallaState();
+  State<ProductoDetallePantalla> createState() =>
+      _ProductoDetallePantallaState();
 }
 
 class _ProductoDetallePantallaState extends State<ProductoDetallePantalla>
     with SingleTickerProviderStateMixin {
-  static const double _kTablet = 900;
+  static const double _kTablet = LayoutApp.kTablet;
 
   // ancho máximo cómodo para el detalle en tablet
-  static const double _kMaxPageWidth = 1120;
+  static const double _kMaxPageWidth = LayoutApp.kMaxPageWidth;
 
   // sheets: ancho/alto máximo (no gigantones)
   static const double _kMaxSheetWidth = 620;
 
   String _moneda = r'$';
 
-  static const _unidadesOpciones = <String>['unidad', 'pack', 'caja', 'kg', 'Otro'];
+  static const _unidadesOpciones = <String>[
+    'unidad',
+    'pack',
+    'caja',
+    'kg',
+    'Otro',
+  ];
 
   late final TabController _tabController;
 
@@ -45,8 +55,9 @@ class _ProductoDetallePantallaState extends State<ProductoDetallePantalla>
 
     _productoFuture = _cargarProducto();
     _stockFuture = _cargarStock();
-    _movsFuture =
-        Proveedores.inventarioRepositorio.listarMovimientosDeProducto(widget.productoId);
+    _movsFuture = Proveedores.inventarioRepositorio.listarMovimientosDeProducto(
+      widget.productoId,
+    );
 
     _tabController = TabController(length: 2, vsync: this);
     _tabController.addListener(() {
@@ -64,22 +75,23 @@ class _ProductoDetallePantallaState extends State<ProductoDetallePantalla>
     super.dispose();
   }
 
-  bool _esTabletUI(BuildContext context) => MediaQuery.of(context).size.width >= _kTablet;
+  bool _esTabletUI(BuildContext context) =>
+      MediaQuery.of(context).size.width >= _kTablet;
 
   void _refreshTodo() {
     setState(() {
       _productoFuture = _cargarProducto();
       _stockFuture = _cargarStock();
-      _movsFuture =
-          Proveedores.inventarioRepositorio.listarMovimientosDeProducto(widget.productoId);
+      _movsFuture = Proveedores.inventarioRepositorio
+          .listarMovimientosDeProducto(widget.productoId);
     });
   }
 
   void _refreshStockYMovs() {
     setState(() {
       _stockFuture = _cargarStock();
-      _movsFuture =
-          Proveedores.inventarioRepositorio.listarMovimientosDeProducto(widget.productoId);
+      _movsFuture = Proveedores.inventarioRepositorio
+          .listarMovimientosDeProducto(widget.productoId);
     });
   }
 
@@ -93,8 +105,33 @@ class _ProductoDetallePantallaState extends State<ProductoDetallePantalla>
     return Proveedores.inventarioRepositorio.obtenerProducto(widget.productoId);
   }
 
-  Future<double> _cargarStock() {
-    return Proveedores.inventarioRepositorio.calcularStockActual(widget.productoId);
+  Future<double> _cargarStock() async {
+    final p = await Proveedores.inventarioRepositorio.obtenerProducto(
+      widget.productoId,
+    );
+    if (p == null) return 0.0;
+
+    final stockPropio = await Proveedores.inventarioRepositorio
+        .calcularStockActual(widget.productoId);
+    if (p.productoPadreId != null) return stockPropio;
+
+    final productos = await Proveedores.inventarioRepositorio.listarProductos(
+      incluirInactivos: true,
+    );
+    final idsVariantes = productos
+        .where((x) => x.productoPadreId == p.id)
+        .map((x) => x.id)
+        .toList();
+    if (idsVariantes.isEmpty) return stockPropio;
+
+    final stockVariantes = await Proveedores.inventarioRepositorio
+        .calcularStockActualPorProductos(idsVariantes);
+
+    double total = stockPropio;
+    for (final id in idsVariantes) {
+      total += stockVariantes[id] ?? 0.0;
+    }
+    return total;
   }
 
   Future<void> _nuevoMovimiento() async {
@@ -116,7 +153,10 @@ class _ProductoDetallePantallaState extends State<ProductoDetallePantalla>
     final media = MediaQuery.of(context);
     final esTablet = _esTabletUI(context);
 
-    final maxH = (media.size.height * (esTablet ? 0.72 : 0.92)).clamp(260.0, 720.0);
+    final maxH = (media.size.height * (esTablet ? 0.72 : 0.92)).clamp(
+      260.0,
+      720.0,
+    );
 
     return showModalBottomSheet<T>(
       context: context,
@@ -188,15 +228,25 @@ class _ProductoDetallePantallaState extends State<ProductoDetallePantalla>
 
   Future<void> _editarProducto(Producto p) async {
     final nombreCtrl = TextEditingController(text: p.nombre);
+    final skuCtrl = TextEditingController(text: p.sku ?? '');
+    final varianteCtrl = TextEditingController(text: p.variante ?? '');
+    final subvarianteCtrl = TextEditingController(text: p.subvariante ?? '');
     final unidadCtrl = TextEditingController(text: p.unidad);
-    final minimoCtrl = TextEditingController(text: p.stockMinimo.toStringAsFixed(2));
-    final costoCtrl = TextEditingController(text: p.costoActual.toStringAsFixed(2));
-    final precioCtrl = TextEditingController(text: p.precioSugerido.toStringAsFixed(2));
+    final minimoCtrl = TextEditingController(
+      text: p.stockMinimo.toStringAsFixed(2),
+    );
+    final costoCtrl = TextEditingController(
+      text: p.costoActual.toStringAsFixed(2),
+    );
+    final precioCtrl = TextEditingController(
+      text: p.precioSugerido.toStringAsFixed(2),
+    );
     final proveedorCtrl = TextEditingController(text: p.proveedor ?? '');
     bool activo = p.activo;
 
     final unidadBase = p.unidad.trim().toLowerCase();
-    final esOpcion = _unidadesOpciones.contains(unidadBase) && unidadBase != 'otro';
+    final esOpcion =
+        _unidadesOpciones.contains(unidadBase) && unidadBase != 'otro';
     String unidadSel = esOpcion ? unidadBase : 'Otro';
     bool usarOtro = !esOpcion;
 
@@ -206,7 +256,8 @@ class _ProductoDetallePantallaState extends State<ProductoDetallePantalla>
       unidadCtrl.text = p.unidad;
     }
 
-    double parseNum(String t) => double.tryParse(t.trim().replaceAll(',', '.')) ?? 0.0;
+    double parseNum(String t) =>
+        double.tryParse(t.trim().replaceAll(',', '.')) ?? 0.0;
 
     final ok = await _showAdaptiveSheet<bool>(
       builder: (context) {
@@ -218,7 +269,10 @@ class _ProductoDetallePantallaState extends State<ProductoDetallePantalla>
                   padding: const EdgeInsets.fromLTRB(16, 10, 10, 6),
                   child: Row(
                     children: [
-                      Text('Editar producto', style: Theme.of(context).textTheme.titleLarge),
+                      Text(
+                        'Editar producto',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
                       const Spacer(),
                       IconButton(
                         onPressed: () => Navigator.pop(context, false),
@@ -236,7 +290,33 @@ class _ProductoDetallePantallaState extends State<ProductoDetallePantalla>
                       children: [
                         TextField(
                           controller: nombreCtrl,
-                          decoration: const InputDecoration(labelText: 'Nombre'),
+                          decoration: const InputDecoration(
+                            labelText: 'Nombre',
+                          ),
+                          textInputAction: TextInputAction.next,
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: skuCtrl,
+                          decoration: const InputDecoration(
+                            labelText: 'SKU (opcional)',
+                          ),
+                          textInputAction: TextInputAction.next,
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: varianteCtrl,
+                          decoration: const InputDecoration(
+                            labelText: 'Variante (opcional)',
+                          ),
+                          textInputAction: TextInputAction.next,
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: subvarianteCtrl,
+                          decoration: const InputDecoration(
+                            labelText: 'Subvariante (opcional)',
+                          ),
                           textInputAction: TextInputAction.next,
                         ),
                         const SizedBox(height: 12),
@@ -245,10 +325,12 @@ class _ProductoDetallePantallaState extends State<ProductoDetallePantalla>
                           expandedInsets: EdgeInsets.zero,
                           label: const Text('Unidad'),
                           dropdownMenuEntries: _unidadesOpciones
-                              .map((u) => DropdownMenuEntry<String>(
-                            value: u,
-                            label: _capPrimera(u),
-                          ))
+                              .map(
+                                (u) => DropdownMenuEntry<String>(
+                                  value: u,
+                                  label: _capPrimera(u),
+                                ),
+                              )
                               .toList(),
                           onSelected: (v) {
                             final val = v ?? 'unidad';
@@ -272,35 +354,51 @@ class _ProductoDetallePantallaState extends State<ProductoDetallePantalla>
                           const SizedBox(height: 12),
                           TextField(
                             controller: unidadCtrl,
-                            decoration: const InputDecoration(labelText: 'Unidad personalizada'),
+                            decoration: const InputDecoration(
+                              labelText: 'Unidad personalizada',
+                            ),
                             textInputAction: TextInputAction.next,
                           ),
                         ],
                         const SizedBox(height: 12),
                         TextField(
                           controller: minimoCtrl,
-                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                          decoration: const InputDecoration(labelText: 'Stock mínimo'),
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                          decoration: const InputDecoration(
+                            labelText: 'Stock mínimo',
+                          ),
                           textInputAction: TextInputAction.next,
                         ),
                         const SizedBox(height: 12),
                         TextField(
                           controller: costoCtrl,
-                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                          decoration: InputDecoration(labelText: 'Costo actual ($_moneda)'),
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                          decoration: InputDecoration(
+                            labelText: 'Costo promedio actual ($_moneda)',
+                          ),
                           textInputAction: TextInputAction.next,
                         ),
                         const SizedBox(height: 12),
                         TextField(
                           controller: precioCtrl,
-                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                          decoration: InputDecoration(labelText: 'Precio sugerido ($_moneda)'),
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                          decoration: InputDecoration(
+                            labelText: 'Precio para la venta ($_moneda)',
+                          ),
                           textInputAction: TextInputAction.next,
                         ),
                         const SizedBox(height: 12),
                         TextField(
                           controller: proveedorCtrl,
-                          decoration: const InputDecoration(labelText: 'Proveedor (opcional)'),
+                          decoration: const InputDecoration(
+                            labelText: 'Proveedor (opcional)',
+                          ),
                           textInputAction: TextInputAction.done,
                         ),
                         const SizedBox(height: 12),
@@ -349,17 +447,25 @@ class _ProductoDetallePantallaState extends State<ProductoDetallePantalla>
     if (ok != true) return;
 
     final nombre = nombreCtrl.text.trim();
+    final sku = skuCtrl.text.trim();
+    final variante = varianteCtrl.text.trim();
+    final subvariante = subvarianteCtrl.text.trim();
     final unidad = unidadCtrl.text.trim();
     if (nombre.isEmpty || unidad.isEmpty) return;
 
     final stockMinimo = parseNum(minimoCtrl.text);
     final costoActual = parseNum(costoCtrl.text);
     final precioSugerido = parseNum(precioCtrl.text);
-    final proveedor = proveedorCtrl.text.trim().isEmpty ? null : proveedorCtrl.text.trim();
+    final proveedor = proveedorCtrl.text.trim().isEmpty
+        ? null
+        : proveedorCtrl.text.trim();
 
     await Proveedores.inventarioRepositorio.actualizarProducto(
       id: p.id,
       nombre: nombre,
+      sku: Value(sku.isEmpty ? null : sku),
+      variante: Value(variante.isEmpty ? null : variante),
+      subvariante: Value(subvariante.isEmpty ? null : subvariante),
       unidad: unidad,
       costoActual: costoActual,
       precioSugerido: precioSugerido,
@@ -384,59 +490,66 @@ class _ProductoDetallePantallaState extends State<ProductoDetallePantalla>
     final ruta = (p.imagen ?? '').trim();
     final ok = _tieneFoto(p);
 
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(22),
-      child: Stack(
-        children: [
-          Container(
-            height: 210,
-            width: double.infinity,
-            color: cs.surfaceContainerHighest,
-            child: ok
-                ? Image.file(File(ruta), fit: BoxFit.cover)
-                : Center(
-              child: Icon(
-                Icons.image_outlined,
-                size: 56,
-                color: cs.onSurfaceVariant,
-              ),
-            ),
-          ),
-          Positioned.fill(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.black.withValues(alpha: 0.15),
-                    Colors.black.withValues(alpha: 0.00),
-                    Colors.black.withValues(alpha: 0.45),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          Positioned(
-            top: 10,
-            right: 10,
-            child: Row(
+    return Align(
+      alignment: Alignment.center,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 360),
+        child: AspectRatio(
+          aspectRatio: 1,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(22),
+            child: Stack(
               children: [
-                IconButton.filledTonal(
-                  onPressed: () => _cambiarFoto(p),
-                  icon: const Icon(Icons.photo_camera_back_outlined),
-                  tooltip: 'Foto',
+                Container(
+                  color: cs.surfaceContainerHighest,
+                  child: ok
+                      ? Image.file(File(ruta), fit: BoxFit.cover)
+                      : Center(
+                          child: Icon(
+                            Icons.image_outlined,
+                            size: 56,
+                            color: cs.onSurfaceVariant,
+                          ),
+                        ),
                 ),
-                const SizedBox(width: 8),
-                IconButton.filledTonal(
-                  onPressed: () => _editarProducto(p),
-                  icon: const Icon(Icons.edit_outlined),
-                  tooltip: 'Editar',
+                Positioned.fill(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.black.withValues(alpha: 0.10),
+                          Colors.black.withValues(alpha: 0.00),
+                          Colors.black.withValues(alpha: 0.30),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  top: 10,
+                  right: 10,
+                  child: Row(
+                    children: [
+                      IconButton.filledTonal(
+                        onPressed: () => _cambiarFoto(p),
+                        icon: const Icon(Icons.photo_camera_back_outlined),
+                        tooltip: 'Foto',
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton.filledTonal(
+                        onPressed: () => _editarProducto(p),
+                        icon: const Icon(Icons.edit_outlined),
+                        tooltip: 'Editar',
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
           ),
-        ],
+        ),
       ),
     );
   }
@@ -448,7 +561,10 @@ class _ProductoDetallePantallaState extends State<ProductoDetallePantalla>
           mainAxisSize: MainAxisSize.min,
           children: [
             const SizedBox(height: 6),
-            Text('Foto del producto', style: Theme.of(context).textTheme.titleMedium),
+            Text(
+              'Foto del producto',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
             const SizedBox(height: 6),
             const Divider(height: 1),
             ListTile(
@@ -479,7 +595,10 @@ class _ProductoDetallePantallaState extends State<ProductoDetallePantalla>
 
     if (opcion == 2) {
       await FotosProducto.borrarSiExiste(p.imagen);
-      await Proveedores.inventarioRepositorio.actualizarImagenProducto(id: p.id, imagen: null);
+      await Proveedores.inventarioRepositorio.actualizarImagenProducto(
+        id: p.id,
+        imagen: null,
+      );
       if (!mounted) return;
       _refreshTodo();
       return;
@@ -492,7 +611,10 @@ class _ProductoDetallePantallaState extends State<ProductoDetallePantalla>
     if (ruta == null) return;
 
     await FotosProducto.borrarSiExiste(p.imagen);
-    await Proveedores.inventarioRepositorio.actualizarImagenProducto(id: p.id, imagen: ruta);
+    await Proveedores.inventarioRepositorio.actualizarImagenProducto(
+      id: p.id,
+      imagen: ruta,
+    );
 
     if (!mounted) return;
     _refreshTodo();
@@ -509,7 +631,7 @@ class _ProductoDetallePantallaState extends State<ProductoDetallePantalla>
       case 'ajuste':
         return 'Ajuste';
       case 'devolucion':
-        return 'Devolución';
+        return 'Devolucion';
       default:
         return tipo;
     }
@@ -518,15 +640,29 @@ class _ProductoDetallePantallaState extends State<ProductoDetallePantalla>
   IconData _iconoTipoMov(String tipo) {
     switch (tipo) {
       case 'ingreso':
-        return Icons.add_circle_outline;
+        return Icons.south_west_rounded;
       case 'egreso':
-        return Icons.remove_circle_outline;
+        return Icons.north_east_rounded;
       case 'ajuste':
-        return Icons.tune;
+        return Icons.tune_rounded;
       case 'devolucion':
-        return Icons.assignment_return_outlined;
+        return Icons.assignment_return_rounded;
       default:
-        return Icons.swap_horiz;
+        return Icons.swap_horiz_rounded;
+    }
+  }
+
+  Color _colorTipoMov(BuildContext context, String tipo) {
+    final cs = Theme.of(context).colorScheme;
+    switch (tipo) {
+      case 'ingreso':
+      case 'devolucion':
+        return cs.primary;
+      case 'egreso':
+        return cs.error;
+      case 'ajuste':
+      default:
+        return cs.secondary;
     }
   }
 
@@ -563,7 +699,9 @@ class _ProductoDetallePantallaState extends State<ProductoDetallePantalla>
       builder: (context) {
         return AlertDialog(
           title: const Text('Cancelar movimiento'),
-          content: const Text('Lo deja sin efecto (crea el inverso) y lo marca como cancelado.'),
+          content: const Text(
+            'Lo deja sin efecto (crea el inverso) y lo marca como cancelado.',
+          ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
@@ -607,7 +745,7 @@ class _ProductoDetallePantallaState extends State<ProductoDetallePantalla>
   Future<void> _verDetalleMovimiento(Movimiento m, String unidad) async {
     final v = _cantidadConSigno(m);
     final txt =
-        '${v >= 0 ? '+' : '-'}${v.abs().toStringAsFixed(2)} ${_unidadConCantidad(unidad, v.abs())}';
+        '${v >= 0 ? '+' : '-'}${Formatos.cantidad(v.abs(), unidad: unidad)} ${_unidadConCantidad(unidad, v.abs())}';
 
     final ref = (m.referencia ?? '').trim();
     final nota = (m.nota ?? '').trim();
@@ -667,10 +805,8 @@ class _ProductoDetallePantallaState extends State<ProductoDetallePantalla>
         }
         final movs = snapM.data ?? [];
         if (movs.isEmpty) {
-          return const Center(child: Text('Todavía no hay movimientos'));
+          return const Center(child: Text('Todavia no hay movimientos'));
         }
-
-        final cs = Theme.of(context).colorScheme;
 
         return ListView.separated(
           padding: padding,
@@ -681,46 +817,112 @@ class _ProductoDetallePantallaState extends State<ProductoDetallePantalla>
             final v = _cantidadConSigno(m);
             final cancelado = (m.nota ?? '').contains('CANCELADO');
 
-            final cantTxt = '${v >= 0 ? '+' : '-'}${v.abs().toStringAsFixed(2)}';
+            final cantTxt =
+                '${v >= 0 ? '+' : '-'}${Formatos.cantidad(v.abs(), unidad: unidad)}';
+
+            final tipoColor = _colorTipoMov(context, m.tipo);
+            final nota = (m.nota ?? '').trim();
+            final referencia = (m.referencia ?? '').trim();
 
             return Card(
               clipBehavior: Clip.antiAlias,
-              child: ListTile(
-                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              color: Theme.of(context).colorScheme.surfaceContainerLow,
+              child: InkWell(
                 onTap: () => _verDetalleMovimiento(m, unidad),
-                leading: Icon(_iconoTipoMov(m.tipo)),
-                title: Text(_textoTipo(m.tipo), style: Theme.of(context).textTheme.titleMedium),
-                subtitle: Text(
-                  '${_fecha(m.fecha)}${(m.nota ?? '').trim().isEmpty ? '' : '\n${m.nota ?? ''}'}',
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodySmall
-                      ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
-                ),
-                trailing: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      cantTxt,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
-                        color: cancelado
-                            ? Theme.of(context).disabledColor
-                            : (v < 0 ? cs.error : cs.primary),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      CircleAvatar(
+                        radius: 18,
+                        backgroundColor: tipoColor.withValues(alpha: 0.14),
+                        child: Icon(
+                          _iconoTipoMov(m.tipo),
+                          size: 18,
+                          color: tipoColor,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      _unidadConCantidad(unidad, v.abs()),
-                      style: Theme.of(context)
-                          .textTheme
-                          .labelMedium
-                          ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
-                    ),
-                  ],
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _textoTipo(m.tipo),
+                              style: Theme.of(context).textTheme.titleSmall
+                                  ?.copyWith(fontWeight: FontWeight.w700),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              _fecha(m.fecha),
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.onSurfaceVariant,
+                                  ),
+                            ),
+                            if (nota.isNotEmpty) ...[
+                              const SizedBox(height: 6),
+                              Text(
+                                nota,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.bodyMedium,
+                              ),
+                            ],
+                            if (referencia.isNotEmpty) ...[
+                              const SizedBox(height: 4),
+                              Text(
+                                'Ref: $referencia',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.labelSmall
+                                    ?.copyWith(
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.onSurfaceVariant,
+                                    ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            cantTxt,
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(
+                                  fontWeight: FontWeight.w800,
+                                  color: cancelado
+                                      ? Theme.of(context).disabledColor
+                                      : (v < 0
+                                            ? Theme.of(
+                                                context,
+                                              ).colorScheme.error
+                                            : Theme.of(
+                                                context,
+                                              ).colorScheme.primary),
+                                ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            _unidadConCantidad(unidad, v.abs()),
+                            style: Theme.of(context).textTheme.labelMedium
+                                ?.copyWith(
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onSurfaceVariant,
+                                ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               ),
             );
@@ -732,17 +934,32 @@ class _ProductoDetallePantallaState extends State<ProductoDetallePantalla>
 
   // -------------------- UI “PRO” --------------------
 
-  Widget _chip(String text, IconData icon) {
-    return Chip(
-      label: Text(text),
-      avatar: Icon(icon, size: 18),
+  Widget _chip(String text, IconData icon, {required Color color}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: 0.28)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: color),
+          const SizedBox(width: 6),
+          Text(
+            text,
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+              color: color,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
-  Widget _statsCard({
-    required Producto p,
-    required double stock,
-  }) {
+  Widget _statsCard({required Producto p, required double stock}) {
     final cs = Theme.of(context).colorScheme;
     final enFalta = stock < p.stockMinimo;
     final stockColor = enFalta ? cs.error : cs.primary;
@@ -754,7 +971,9 @@ class _ProductoDetallePantallaState extends State<ProductoDetallePantalla>
           children: [
             Text(
               titulo,
-              style: Theme.of(context).textTheme.labelMedium?.copyWith(color: cs.onSurfaceVariant),
+              style: Theme.of(
+                context,
+              ).textTheme.labelMedium?.copyWith(color: cs.onSurfaceVariant),
             ),
             const SizedBox(height: 6),
             Text(
@@ -762,38 +981,58 @@ class _ProductoDetallePantallaState extends State<ProductoDetallePantalla>
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: big
-                  ? Theme.of(context).textTheme.headlineSmall?.copyWith(color: color)
-                  : Theme.of(context).textTheme.titleMedium?.copyWith(color: color),
+                  ? Theme.of(
+                      context,
+                    ).textTheme.headlineSmall?.copyWith(color: color)
+                  : Theme.of(
+                      context,
+                    ).textTheme.titleMedium?.copyWith(color: color),
             ),
           ],
         ),
       );
     }
 
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Row(
-          children: [
-            stat(
-              'Stock',
-              '${stock.toStringAsFixed(2)} ${_unidadConCantidad(p.unidad, stock)}',
-              color: stockColor,
-              big: true,
-            ),
-            const SizedBox(width: 10),
-            stat(
-              'Mínimo',
-              '${p.stockMinimo.toStringAsFixed(2)} ${_unidadConCantidad(p.unidad, p.stockMinimo)}',
-            ),
-          ],
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(14),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [cs.primary.withValues(alpha: 0.07), Colors.transparent],
+        ),
+      ),
+      child: Card(
+        clipBehavior: Clip.antiAlias,
+        color: cs.surfaceContainerLow,
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              stat(
+                'Stock',
+                '${Formatos.cantidad(stock, unidad: p.unidad)} ${_unidadConCantidad(p.unidad, stock)}',
+                color: stockColor,
+                big: true,
+              ),
+              const SizedBox(width: 10),
+              stat(
+                'Minimo',
+                '${Formatos.cantidad(p.stockMinimo, unidad: p.unidad)} ${_unidadConCantidad(p.unidad, p.stockMinimo)}',
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _filaDetalle(IconData icon, String label, String value, {bool strong = false}) {
+  Widget _filaDetalle(
+    IconData icon,
+    String label,
+    String value, {
+    bool strong = false,
+  }) {
     final cs = Theme.of(context).colorScheme;
     final t = Theme.of(context).textTheme;
 
@@ -818,7 +1057,9 @@ class _ProductoDetallePantallaState extends State<ProductoDetallePantalla>
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.right,
-              style: strong ? t.titleMedium?.copyWith(fontWeight: FontWeight.w800) : t.bodyMedium,
+              style: strong
+                  ? t.titleMedium?.copyWith(fontWeight: FontWeight.w800)
+                  : t.bodyMedium,
             ),
           ),
         ),
@@ -853,44 +1094,166 @@ class _ProductoDetallePantallaState extends State<ProductoDetallePantalla>
     );
   }
 
+  Future<List<_VarianteConStock>> _cargarVariantesConStock(int baseId) async {
+    final productos = await Proveedores.inventarioRepositorio.listarProductos(
+      incluirInactivos: true,
+    );
+    final variantes = productos
+        .where((p) => p.productoPadreId == baseId)
+        .toList();
+    if (variantes.isEmpty) return const [];
+
+    final stock = await Proveedores.inventarioRepositorio
+        .calcularStockActualPorProductos(variantes.map((v) => v.id).toList());
+
+    return variantes
+        .map((v) => _VarianteConStock(producto: v, stock: stock[v.id] ?? 0.0))
+        .toList();
+  }
+
+  Widget _bloqueVariantes(Producto p) {
+    if (p.productoPadreId != null) {
+      return FutureBuilder<Producto?>(
+        future: Proveedores.inventarioRepositorio.obtenerProducto(
+          p.productoPadreId!,
+        ),
+        builder: (context, snap) {
+          final base = snap.data;
+          final texto = base == null
+              ? 'Esta variante pertenece a un producto base'
+              : 'Producto base: ${base.nombreConVariante}';
+          return _bloque('Variantes SKU', [
+            Text(texto, style: Theme.of(context).textTheme.bodyMedium),
+          ]);
+        },
+      );
+    }
+
+    return FutureBuilder<List<_VarianteConStock>>(
+      future: _cargarVariantesConStock(p.id),
+      builder: (context, snap) {
+        final variantes = snap.data ?? const <_VarianteConStock>[];
+        if (snap.connectionState != ConnectionState.done) {
+          return _bloque('Variantes SKU', const [LinearProgressIndicator()]);
+        }
+        if (variantes.isEmpty) {
+          return _bloque('Variantes SKU', const [
+            Text('No hay variantes creadas para este producto base.'),
+          ]);
+        }
+
+        final filas = <Widget>[];
+        for (final item in variantes) {
+          filas.add(
+            InkWell(
+              borderRadius: BorderRadius.circular(10),
+              onTap: () async {
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        ProductoDetallePantalla(productoId: item.producto.id),
+                  ),
+                );
+                if (!mounted) return;
+                _refreshTodo();
+              },
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 6),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        item.producto.nombreConVariante,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      '${Formatos.cantidad(item.stock, unidad: item.producto.unidad)} ${_unidadConCantidad(item.producto.unidad, item.stock)}',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }
+        return _bloque('Variantes SKU', filas);
+      },
+    );
+  }
+
   Widget _detallesCard({required Producto p}) {
+    final skuTxt = (p.sku ?? '').trim();
+    final esVariante = p.productoPadreId != null;
+
+    final filasInventario = <Widget>[
+      _filaDetalle(
+        Icons.qr_code_2_rounded,
+        'SKU',
+        skuTxt.isEmpty ? '-' : skuTxt,
+      ),
+      _filaDetalle(Icons.straighten_outlined, 'Unidad', _capPrimera(p.unidad)),
+      _filaDetalle(
+        Icons.local_shipping_outlined,
+        'Proveedor',
+        p.proveedor ?? '-',
+      ),
+      _filaDetalle(
+        Icons.toggle_on_outlined,
+        'Estado',
+        p.activo ? 'Activo' : 'Inactivo',
+      ),
+    ];
+
+    if (esVariante) {
+      filasInventario.insertAll(1, [
+        _filaDetalle(
+          Icons.category_outlined,
+          'Variante',
+          (p.variante ?? '').trim().isEmpty ? '-' : p.variante!.trim(),
+        ),
+        _filaDetalle(
+          Icons.layers_outlined,
+          'Subvariante',
+          (p.subvariante ?? '').trim().isEmpty ? '-' : p.subvariante!.trim(),
+        ),
+      ]);
+    }
+
     return Column(
       children: [
-        _bloque(
-          'Inventario',
-          [
-            _filaDetalle(Icons.straighten_outlined, 'Unidad', _capPrimera(p.unidad)),
-            _filaDetalle(Icons.local_shipping_outlined, 'Proveedor', p.proveedor ?? '-'),
-            _filaDetalle(Icons.toggle_on_outlined, 'Estado', p.activo ? 'Activo' : 'Inactivo'),
-          ],
-        ),
+        _bloque('Inventario', filasInventario),
         const SizedBox(height: 12),
-        _bloque(
-          'Precios',
-          [
-            _filaDetalle(
-              Icons.payments_outlined,
-              'Costo actual',
-              Formatos.dinero(_moneda, p.costoActual),
-              strong: true,
-            ),
-            _filaDetalle(
-              Icons.sell_outlined,
-              'Precio sugerido',
-              Formatos.dinero(_moneda, p.precioSugerido),
-            ),
-          ],
-        ),
+        _bloque('Precios', [
+          _filaDetalle(
+            Icons.payments_outlined,
+            'Costo promedio actual',
+            Formatos.dinero(_moneda, p.costoActual),
+            strong: true,
+          ),
+          _filaDetalle(
+            Icons.sell_outlined,
+            'Precio para la venta',
+            Formatos.dinero(_moneda, p.precioSugerido),
+          ),
+        ]),
+        const SizedBox(height: 12),
+        _bloqueVariantes(p),
       ],
     );
   }
 
   // -------------------- LAYOUTS --------------------
 
-  Widget _mobileBody({
-    required Producto p,
-    required double stock,
-  }) {
+  Widget _mobileBody({required Producto p, required double stock}) {
     final enFalta = stock < p.stockMinimo;
 
     return NestedScrollView(
@@ -909,7 +1272,7 @@ class _ProductoDetallePantallaState extends State<ProductoDetallePantalla>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    p.nombre,
+                    p.nombreConVariante,
                     style: Theme.of(context).textTheme.headlineSmall,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
@@ -921,9 +1284,19 @@ class _ProductoDetallePantallaState extends State<ProductoDetallePantalla>
                     children: [
                       _chip(
                         p.activo ? 'Activo' : 'Inactivo',
-                        p.activo ? Icons.check_circle_outline : Icons.pause_circle_outline,
+                        p.activo
+                            ? Icons.check_circle_outline
+                            : Icons.pause_circle_outline,
+                        color: p.activo
+                            ? Theme.of(context).colorScheme.primary
+                            : Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
-                      if (enFalta) _chip('Bajo mínimo', Icons.warning_amber_outlined),
+                      if (enFalta)
+                        _chip(
+                          'Bajo minimo',
+                          Icons.warning_amber_outlined,
+                          color: Theme.of(context).colorScheme.error,
+                        ),
                     ],
                   ),
                   const SizedBox(height: 12),
@@ -976,101 +1349,92 @@ class _ProductoDetallePantallaState extends State<ProductoDetallePantalla>
     );
   }
 
-  Widget _tabletBody({
-    required Producto p,
-    required double stock,
-  }) {
+  Widget _tabletBody({required Producto p, required double stock}) {
     final enFalta = stock < p.stockMinimo;
-
-    const leftWidth = 380.0;
 
     return _pageWrapTablet(
       Padding(
-        padding: const EdgeInsets.all(12),
-        child: Row(
-          children: [
-            SizedBox(
-              width: leftWidth,
-              child: SingleChildScrollView(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
+        padding: TabletMasterDetailLayout.kPagePadding,
+        child: TabletMasterDetailLayout(
+          master: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _heroFoto(p),
+                const SizedBox(height: 12),
+                Text(
+                  p.nombreConVariante,
+                  style: Theme.of(context).textTheme.headlineSmall,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
                   children: [
-                    _heroFoto(p),
-                    const SizedBox(height: 12),
-                    Text(
-                      p.nombre,
-                      style: Theme.of(context).textTheme.headlineSmall,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
+                    _chip(
+                      p.activo ? 'Activo' : 'Inactivo',
+                      p.activo
+                          ? Icons.check_circle_outline
+                          : Icons.pause_circle_outline,
+                      color: p.activo
+                          ? Theme.of(context).colorScheme.primary
+                          : Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        _chip(
-                          p.activo ? 'Activo' : 'Inactivo',
-                          p.activo ? Icons.check_circle_outline : Icons.pause_circle_outline,
-                        ),
-                        if (enFalta) _chip('Bajo mínimo', Icons.warning_amber_outlined),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    _statsCard(p: p, stock: stock),
-                    const SizedBox(height: 12),
-                    FilledButton.icon(
-                      onPressed: _nuevoMovimiento,
-                      icon: const Icon(Icons.add),
-                      label: const Text('Nuevo movimiento'),
-                    ),
-                    const SizedBox(height: 12),
-                    _detallesCard(p: p),
+                    if (enFalta)
+                      _chip(
+                        'Bajo minimo',
+                        Icons.warning_amber_outlined,
+                        color: Theme.of(context).colorScheme.error,
+                      ),
                   ],
                 ),
-              ),
+                const SizedBox(height: 12),
+                _statsCard(p: p, stock: stock),
+                const SizedBox(height: 12),
+                FilledButton.icon(
+                  onPressed: _nuevoMovimiento,
+                  icon: const Icon(Icons.add),
+                  label: const Text('Nuevo movimiento'),
+                ),
+                const SizedBox(height: 12),
+                _detallesCard(p: p),
+              ],
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Align(
-                alignment: Alignment.topCenter,
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 720),
-                  child: Card(
-                    clipBehavior: Clip.antiAlias,
-                    child: Column(
-                      children: [
-                        Material(
-                          color: Theme.of(context).colorScheme.surface,
-                          child: TabBar(
-                            controller: _tabController,
-                            tabs: const [
-                              Tab(text: 'Detalles'),
-                              Tab(text: 'Movimientos'),
-                            ],
-                          ),
-                        ),
-                        Expanded(
-                          child: TabBarView(
-                            controller: _tabController,
-                            children: [
-                              SingleChildScrollView(
-                                padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-                                child: _detallesCard(p: p),
-                              ),
-                              _listaMovimientos(
-                                unidad: p.unidad,
-                                padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
+          ),
+          detail: Card(
+            clipBehavior: Clip.antiAlias,
+            child: Column(
+              children: [
+                Material(
+                  color: Theme.of(context).colorScheme.surface,
+                  child: TabBar(
+                    controller: _tabController,
+                    tabs: const [
+                      Tab(text: 'Detalles'),
+                      Tab(text: 'Movimientos'),
+                    ],
                   ),
                 ),
-              ),
+                Expanded(
+                  child: TabBarView(
+                    controller: _tabController,
+                    children: [
+                      SingleChildScrollView(
+                        padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+                        child: _detallesCard(p: p),
+                      ),
+                      _listaMovimientos(
+                        unidad: p.unidad,
+                        padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -1100,24 +1464,31 @@ class _ProductoDetallePantallaState extends State<ProductoDetallePantalla>
               : p == null
               ? const Center(child: Text('Producto no encontrado'))
               : FutureBuilder<double>(
-            future: _stockFuture,
-            builder: (context, snapS) {
-              final stock = snapS.data ?? 0;
+                  future: _stockFuture,
+                  builder: (context, snapS) {
+                    final stock = snapS.data ?? 0;
 
-              return LayoutBuilder(
-                builder: (context, c) {
-                  final esTablet = c.maxWidth >= _kTablet;
-                  return esTablet
-                      ? _tabletBody(p: p, stock: stock)
-                      : _mobileBody(p: p, stock: stock);
-                },
-              );
-            },
-          ),
+                    return LayoutBuilder(
+                      builder: (context, c) {
+                        final esTablet = c.maxWidth >= _kTablet;
+                        return esTablet
+                            ? _tabletBody(p: p, stock: stock)
+                            : _mobileBody(p: p, stock: stock);
+                      },
+                    );
+                  },
+                ),
         );
       },
     );
   }
+}
+
+class _VarianteConStock {
+  final Producto producto;
+  final double stock;
+
+  const _VarianteConStock({required this.producto, required this.stock});
 }
 
 // Header fijo para TabBar en NestedScrollView (móvil)
@@ -1133,7 +1504,11 @@ class _TabsHeaderDelegate extends SliverPersistentHeaderDelegate {
   double get maxExtent => tabBar.preferredSize.height;
 
   @override
-  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
     return Container(
       color: Theme.of(context).colorScheme.surface,
       padding: const EdgeInsets.symmetric(horizontal: 12),

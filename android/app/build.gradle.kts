@@ -14,7 +14,7 @@ if (keystorePropertiesFile.exists()) {
 }
 
 android {
-    namespace = "ar.maillet.gestion_de_stock"
+    namespace = "ar.maillet.gestion_de_asistencias"
 
     // fijo para evitar lStar / recursos de libs
     compileSdk = 36
@@ -32,7 +32,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "ar.maillet.gestion_de_stock"
+        applicationId = "ar.maillet.gestion_de_asistencias"
 
         // fijo (muchas libs esperan 21+)
         minSdk = flutter.minSdkVersion

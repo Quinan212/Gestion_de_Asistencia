@@ -8,6 +8,44 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shared_storage/shared_storage.dart';
 
+class RespaldoInspeccion {
+  final bool valido;
+  final int dbBytes;
+  final bool tienePrefs;
+  final bool prefsValidas;
+  final int fotosIndexadas;
+  final int fotosDisponibles;
+  final List<String> errores;
+  final List<String> advertencias;
+
+  const RespaldoInspeccion({
+    required this.valido,
+    required this.dbBytes,
+    required this.tienePrefs,
+    required this.prefsValidas,
+    required this.fotosIndexadas,
+    required this.fotosDisponibles,
+    required this.errores,
+    required this.advertencias,
+  });
+
+  bool get tieneErrores => errores.isNotEmpty;
+  bool get tieneAdvertencias => advertencias.isNotEmpty;
+
+  String get resumenCorto {
+    final kb = dbBytes <= 0
+        ? '0 KB'
+        : '${(dbBytes / 1024).toStringAsFixed(1)} KB';
+    final prefsTxt = !tienePrefs
+        ? 'sin prefs'
+        : (prefsValidas ? 'prefs ok' : 'prefs con problemas');
+    final fotosTxt = fotosIndexadas <= 0
+        ? 'sin indice de fotos'
+        : 'fotos $fotosDisponibles/$fotosIndexadas';
+    return 'DB $kb - $prefsTxt - $fotosTxt';
+  }
+}
+
 class RespaldoLocal {
   static const String _kTreeUri = 'respaldo_tree_uri_v1';
   static const String _kRestoreDone = 'respaldo_restore_done_v1';
@@ -19,6 +57,145 @@ class RespaldoLocal {
   static const String _indiceFotos = 'productos_index.json';
 
   static const String _archivoPrefs = 'prefs.json';
+
+  static Future<RespaldoInspeccion> inspeccionarRespaldoDesdeTreeUri(
+    Uri treeUri,
+  ) async {
+    final errores = <String>[];
+    final advertencias = <String>[];
+
+    var dbBytes = 0;
+    var tienePrefs = false;
+    var prefsValidas = false;
+    var fotosIndexadas = 0;
+    var fotosDisponibles = 0;
+
+    final root = await _rootFromTree(treeUri);
+    if (root == null) {
+      errores.add('No se pudo abrir la carpeta elegida.');
+      return RespaldoInspeccion(
+        valido: false,
+        dbBytes: dbBytes,
+        tienePrefs: tienePrefs,
+        prefsValidas: prefsValidas,
+        fotosIndexadas: fotosIndexadas,
+        fotosDisponibles: fotosDisponibles,
+        errores: errores,
+        advertencias: advertencias,
+      );
+    }
+
+    final backupDir = await _getOrCreateDirUnder(
+      root,
+      _carpetaRaiz,
+      createIfMissing: false,
+    );
+    if (backupDir == null) {
+      errores.add('No existe la carpeta "$_carpetaRaiz".');
+      return RespaldoInspeccion(
+        valido: false,
+        dbBytes: dbBytes,
+        tienePrefs: tienePrefs,
+        prefsValidas: prefsValidas,
+        fotosIndexadas: fotosIndexadas,
+        fotosDisponibles: fotosDisponibles,
+        errores: errores,
+        advertencias: advertencias,
+      );
+    }
+
+    final archivoDb = await backupDir.findFile(_archivoDb);
+    if (archivoDb == null) {
+      errores.add('No se encontro el archivo de base de datos.');
+    } else {
+      final bytes = await archivoDb.getContent();
+      dbBytes = bytes?.length ?? 0;
+      if (dbBytes <= 0) {
+        errores.add('El archivo de base de datos esta vacio o dañado.');
+      }
+    }
+
+    final prefsFile = await backupDir.findFile(_archivoPrefs);
+    if (prefsFile == null) {
+      advertencias.add('No se encontro prefs.json (se restaurara solo DB).');
+    } else {
+      tienePrefs = true;
+      try {
+        final prefsBytes = await prefsFile.getContent();
+        if (prefsBytes == null || prefsBytes.isEmpty) {
+          advertencias.add('prefs.json esta vacio.');
+        } else {
+          final txt = utf8.decode(prefsBytes);
+          final obj = jsonDecode(txt);
+          if (obj is Map && (obj['data'] is Map || obj.isNotEmpty)) {
+            prefsValidas = true;
+          } else {
+            advertencias.add('prefs.json no tiene un formato valido.');
+          }
+        }
+      } catch (_) {
+        advertencias.add('No se pudo leer prefs.json.');
+      }
+    }
+
+    final fotosSaf = await _getOrCreateDirUnder(
+      backupDir,
+      _carpetaFotos,
+      createIfMissing: false,
+    );
+    if (fotosSaf == null) {
+      advertencias.add('No se encontro carpeta de fotos.');
+    } else {
+      final indexFile = await fotosSaf.findFile(_indiceFotos);
+      if (indexFile == null) {
+        advertencias.add('No se encontro el indice de fotos.');
+      } else {
+        try {
+          final indexBytes = await indexFile.getContent();
+          if (indexBytes == null || indexBytes.isEmpty) {
+            advertencias.add('El indice de fotos esta vacio.');
+          } else {
+            final obj = jsonDecode(utf8.decode(indexBytes));
+            final filesDyn = (obj is Map && obj['files'] is List)
+                ? (obj['files'] as List)
+                : const [];
+            final files = filesDyn
+                .whereType<String>()
+                .map((s) => s.trim())
+                .where((s) => s.isNotEmpty && s != _indiceFotos)
+                .toList();
+
+            fotosIndexadas = files.length;
+            for (final nombre in files) {
+              final f = await fotosSaf.child(
+                nombre,
+                requiresWriteAccess: false,
+              );
+              if (f != null) fotosDisponibles++;
+            }
+
+            if (fotosIndexadas > 0 && fotosDisponibles < fotosIndexadas) {
+              final faltan = fotosIndexadas - fotosDisponibles;
+              advertencias.add('Faltan $faltan fotos del indice.');
+            }
+          }
+        } catch (_) {
+          advertencias.add('No se pudo interpretar el indice de fotos.');
+        }
+      }
+    }
+
+    return RespaldoInspeccion(
+      valido: errores.isEmpty,
+      dbBytes: dbBytes,
+      tienePrefs: tienePrefs,
+      prefsValidas: prefsValidas,
+      fotosIndexadas: fotosIndexadas,
+      fotosDisponibles: fotosDisponibles,
+      errores: errores,
+      advertencias: advertencias,
+    );
+  }
 
   // -------------------------
   // SAF: elegir / recordar
@@ -63,10 +240,10 @@ class RespaldoLocal {
   }
 
   static Future<DocumentFile?> _getOrCreateDirUnder(
-      DocumentFile parent,
-      String nombre, {
-        required bool createIfMissing,
-      }) async {
+    DocumentFile parent,
+    String nombre, {
+    required bool createIfMissing,
+  }) async {
     final existente = await parent.child(nombre, requiresWriteAccess: true);
     if (existente != null && (existente.isDirectory ?? false)) return existente;
 
@@ -75,11 +252,11 @@ class RespaldoLocal {
   }
 
   static Future<Uri?> _writeFileInDir(
-      DocumentFile dir,
-      String displayName,
-      Uint8List bytes, {
-        String mimeType = 'application/octet-stream',
-      }) async {
+    DocumentFile dir,
+    String displayName,
+    Uint8List bytes, {
+    String mimeType = 'application/octet-stream',
+  }) async {
     // si ya existe, borrar y recrear
     final viejo = await dir.findFile(displayName);
     if (viejo != null) {
@@ -123,7 +300,6 @@ class RespaldoLocal {
 
     // si después guardás la vista lista/cuadricula del inventario, poné tu key acá:
     'inventario_vista', // ejemplo
-
     // si agregás más configs, sumalas acá
   ];
 
@@ -202,10 +378,7 @@ class RespaldoLocal {
     // 2) guardar prefs.json
     try {
       final prefsMap = await _exportarPrefs();
-      final prefsJson = jsonEncode({
-        'version': 1,
-        'data': prefsMap,
-      });
+      final prefsJson = jsonEncode({'version': 1, 'data': prefsMap});
 
       await _writeFileInDir(
         backupDir,
@@ -250,10 +423,7 @@ class RespaldoLocal {
           }
         }
 
-        final indexJson = jsonEncode({
-          'version': 1,
-          'files': nombres,
-        });
+        final indexJson = jsonEncode({'version': 1, 'files': nombres});
 
         await _writeFileInDir(
           fotosDirSaf,
@@ -326,8 +496,9 @@ class RespaldoLocal {
           final indexTxt = utf8.decode(indexBytes);
           final obj = jsonDecode(indexTxt);
 
-          final List<dynamic> filesDyn =
-          (obj is Map && obj['files'] is List) ? (obj['files'] as List) : const [];
+          final List<dynamic> filesDyn = (obj is Map && obj['files'] is List)
+              ? (obj['files'] as List)
+              : const [];
 
           final files = filesDyn
               .whereType<String>()
@@ -342,7 +513,10 @@ class RespaldoLocal {
 
           for (final nombre in files) {
             try {
-              final f = await fotosSaf.child(nombre, requiresWriteAccess: false);
+              final f = await fotosSaf.child(
+                nombre,
+                requiresWriteAccess: false,
+              );
               if (f == null) continue;
 
               final bytes = await f.getContent();

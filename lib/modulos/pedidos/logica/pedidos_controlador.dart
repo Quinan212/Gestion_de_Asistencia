@@ -1,7 +1,7 @@
 // lib/modulos/pedidos/logica/pedidos_controlador.dart
 import 'package:flutter/foundation.dart';
-import 'package:gestion_de_stock/infraestructura/dep_inyeccion/proveedores.dart';
-import 'package:gestion_de_stock/modulos/pedidos/modelos/pedido.dart';
+import 'package:gestion_de_asistencias/infraestructura/dep_inyeccion/proveedores.dart';
+import 'package:gestion_de_asistencias/modulos/pedidos/modelos/pedido.dart';
 
 class PedidosEstadoVM {
   final bool cargando;
@@ -68,9 +68,8 @@ class PedidosControlador extends ChangeNotifier {
       final pedidos = await Proveedores.pedidosRepositorio.listarPedidos();
 
       int? sel = _estado.seleccionadoId;
-      if (sel == null && pedidos.isNotEmpty) sel = pedidos.first.id;
       if (sel != null && !pedidos.any((p) => p.id == sel)) {
-        sel = pedidos.isEmpty ? null : pedidos.first.id;
+        sel = null;
       }
 
       _estado = _estado.copyWith(
@@ -80,7 +79,9 @@ class PedidosControlador extends ChangeNotifier {
         clearError: true,
       );
       notifyListeners();
-    } catch (_) {
+    } catch (e, st) {
+      debugPrint('PedidosControlador.cargar error: ${e.toString()}');
+      debugPrintStack(stackTrace: st);
       _estado = _estado.copyWith(cargando: false, error: 'No se pudo cargar');
       notifyListeners();
     }

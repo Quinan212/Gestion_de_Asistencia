@@ -16,9 +16,43 @@ class InventarioControlador extends ChangeNotifier {
   Map<int, double> get stockPorProducto => _stockPorProducto;
 
   InventarioControlador({InventarioRepositorio? repositorio})
-      : _repo = repositorio ?? Proveedores.inventarioRepositorio;
+    : _repo = repositorio ?? Proveedores.inventarioRepositorio;
 
-  double stockDe(int productoId) => _stockPorProducto[productoId] ?? 0.0;
+  double _stockPropio(int productoId) => _stockPorProducto[productoId] ?? 0.0;
+
+  Producto? _productoPorId(int id) {
+    for (final p in _estado.productos) {
+      if (p.id == id) return p;
+    }
+    return null;
+  }
+
+  bool _coincideFiltro(Producto p, String f) {
+    final nombre = p.nombre.toLowerCase();
+    final variante = (p.variante ?? '').toLowerCase();
+    final subvariante = (p.subvariante ?? '').toLowerCase();
+    final sku = (p.sku ?? '').toLowerCase();
+    final nombreCompleto = p.nombreConVariante.toLowerCase();
+    return nombre.contains(f) ||
+        variante.contains(f) ||
+        subvariante.contains(f) ||
+        sku.contains(f) ||
+        nombreCompleto.contains(f);
+  }
+
+  double stockDe(int productoId) {
+    final p = _productoPorId(productoId);
+    if (p == null) return _stockPropio(productoId);
+    if (p.productoPadreId != null) return _stockPropio(productoId);
+
+    double total = _stockPropio(productoId);
+    for (final item in _estado.productos) {
+      if (item.productoPadreId == productoId) {
+        total += _stockPropio(item.id);
+      }
+    }
+    return total;
+  }
 
   Future<void> cargar() async {
     _estado = _estado.copiarCon(cargando: true, error: null);
@@ -41,7 +75,9 @@ class InventarioControlador extends ChangeNotifier {
         error: null,
       );
       notifyListeners();
-    } catch (_) {
+    } catch (e, st) {
+      debugPrint('InventarioControlador.cargar error: ${e.toString()}');
+      debugPrintStack(stackTrace: st);
       _estado = _estado.copiarCon(
         cargando: false,
         error: 'No se pudo cargar el inventario',
@@ -73,8 +109,20 @@ class InventarioControlador extends ChangeNotifier {
 
   List<Producto> productosFiltrados() {
     final f = _estado.filtro.trim().toLowerCase();
-    if (f.isEmpty) return _estado.productos;
-    return _estado.productos.where((p) => p.nombre.toLowerCase().contains(f)).toList();
+    final bases = _estado.productos
+        .where((p) => p.productoPadreId == null)
+        .toList();
+    if (f.isEmpty) return bases;
+
+    return bases.where((base) {
+      if (_coincideFiltro(base, f)) return true;
+      for (final item in _estado.productos) {
+        if (item.productoPadreId == base.id && _coincideFiltro(item, f)) {
+          return true;
+        }
+      }
+      return false;
+    }).toList();
   }
 
   Future<int?> crearProductoRapido({
@@ -85,7 +133,11 @@ class InventarioControlador extends ChangeNotifier {
       final id = await _repo.crearProducto(nombre: nombre, unidad: unidad);
       await cargar();
       return id;
-    } catch (_) {
+    } catch (e, st) {
+      debugPrint(
+        'InventarioControlador.crearProductoRapido error: ${e.toString()}',
+      );
+      debugPrintStack(stackTrace: st);
       _estado = _estado.copiarCon(error: 'No se pudo crear el producto');
       notifyListeners();
       return null;

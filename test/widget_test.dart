@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:gestion_de_stock/modulos/pedidos/modelos/pedido.dart';
+import 'package:gestion_de_asistencias/modulos/pedidos/modelos/pedido.dart';
 
 void main() {
   test('PedidoEstadoX.fromCode mapea correctamente', () {

@@ -1,11 +1,11 @@
 {
-    "name": "gestion_de_stock",
-    "short_name": "gestion_de_stock",
+    "name": "gestion_de_asistencias",
+    "short_name": "gestion_de_asistencias",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "gestion_de_stock",
+    "description": "gestion_de_asistencias",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

@@ -3,24 +3,36 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
-import 'package:gestion_de_stock/aplicacion/utiles/formatos.dart';
-import 'package:gestion_de_stock/infraestructura/dep_inyeccion/proveedores.dart';
-import 'package:gestion_de_stock/modulos/inventario/modelos/producto.dart';
+import 'package:gestion_de_asistencias/aplicacion/utiles/formatos.dart';
+import 'package:gestion_de_asistencias/aplicacion/utiles/layout_app.dart';
+import 'package:gestion_de_asistencias/aplicacion/utiles/validaciones.dart';
+import 'package:gestion_de_asistencias/infraestructura/dep_inyeccion/proveedores.dart';
+import 'package:gestion_de_asistencias/modulos/inventario/modelos/producto.dart';
 
 class CompraNuevaPantalla extends StatefulWidget {
-  const CompraNuevaPantalla({super.key});
+  final bool embebido;
+  final ValueChanged<int>? onCreada;
+  final VoidCallback? onCancelar;
+
+  const CompraNuevaPantalla({
+    super.key,
+    this.embebido = false,
+    this.onCreada,
+    this.onCancelar,
+  });
 
   @override
   State<CompraNuevaPantalla> createState() => _CompraNuevaPantallaState();
 }
 
 class _CompraNuevaPantallaState extends State<CompraNuevaPantalla> {
-  static const double _kTablet = 900;
+  static const double _kTablet = LayoutApp.kTablet;
   static const double _kMaxAnchoTablet = 620;
 
   String _moneda = r'$';
 
   final _proveedorCtrl = TextEditingController();
+  final _envioCtrl = TextEditingController(text: '0');
   final _notaCtrl = TextEditingController();
 
   final List<_LineaTmp> _lineas = [];
@@ -43,20 +55,38 @@ class _CompraNuevaPantallaState extends State<CompraNuevaPantalla> {
   @override
   void dispose() {
     _proveedorCtrl.dispose();
+    _envioCtrl.dispose();
     _notaCtrl.dispose();
     super.dispose();
   }
 
-  Future<List<Producto>> _cargarProductos() =>
-      Proveedores.inventarioRepositorio.listarProductos(incluirInactivos: false);
+  void _mostrarErrorValidacion(String mensaje) {
+    if (!mounted) return;
+    setState(() => _error = mensaje);
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(mensaje)));
+  }
 
-  double get _total {
+  Future<List<Producto>> _cargarProductos() => Proveedores.inventarioRepositorio
+      .listarProductos(incluirInactivos: false);
+
+  double get _subtotal {
     double t = 0;
     for (final l in _lineas) {
       t += l.subtotal;
     }
     return t;
   }
+
+  double get _envioMonto {
+    final raw = _envioCtrl.text.trim().replaceAll(',', '.');
+    final v = double.tryParse(raw);
+    if (v == null || v < 0) return 0.0;
+    return v;
+  }
+
+  double get _total => _subtotal + _envioMonto;
 
   Widget _miniaturaProducto(Producto p) {
     final ruta = (p.imagen ?? '').trim();
@@ -65,22 +95,49 @@ class _CompraNuevaPantallaState extends State<CompraNuevaPantalla> {
     if (ok) {
       return ClipRRect(
         borderRadius: BorderRadius.circular(8),
-        child: Image.file(
-          File(ruta),
-          width: 34,
-          height: 34,
-          fit: BoxFit.cover,
-        ),
+        child: Image.file(File(ruta), width: 34, height: 34, fit: BoxFit.cover),
       );
     }
     return const Icon(Icons.image_outlined);
+  }
+
+  List<Producto> _basesProducto(List<Producto> productos) {
+    return productos.where((p) => p.productoPadreId == null).toList();
+  }
+
+  List<Producto> _variantesDeBase(List<Producto> productos, int? baseId) {
+    if (baseId == null) return const [];
+    return productos.where((p) => p.productoPadreId == baseId).toList();
+  }
+
+  Producto? _resolverProductoSeleccionado({
+    required List<Producto> productos,
+    required int? baseId,
+    required int? varianteId,
+  }) {
+    if (baseId == null) return null;
+    if (varianteId != null) {
+      for (final p in productos) {
+        if (p.id == varianteId) return p;
+      }
+    }
+    for (final p in productos) {
+      if (p.id == baseId) return p;
+    }
+    return null;
   }
 
   Future<void> _agregarLinea() async {
     final productos = await _cargarProductos();
     if (!mounted) return;
 
+    final activos = productos.where((p) => p.activo).toList();
+    final bases = _basesProducto(activos);
+
     Producto? seleccionado;
+    int? baseId;
+    int? varianteId;
+    List<Producto> variantes = const [];
     final cantidadCtrl = TextEditingController(text: '1');
     final costoCtrl = TextEditingController(text: '0');
 
@@ -88,7 +145,10 @@ class _CompraNuevaPantallaState extends State<CompraNuevaPantalla> {
     double? costoActual;
     bool cargandoInfo = false;
 
-    Future<void> cargarInfo(Producto p, void Function(void Function()) setStateLocal) async {
+    Future<void> cargarInfo(
+      Producto p,
+      void Function(void Function()) setStateLocal,
+    ) async {
       setStateLocal(() {
         cargandoInfo = true;
         stockActual = null;
@@ -96,7 +156,8 @@ class _CompraNuevaPantallaState extends State<CompraNuevaPantalla> {
       });
 
       try {
-        final stock = await Proveedores.inventarioRepositorio.calcularStockActual(p.id);
+        final stock = await Proveedores.inventarioRepositorio
+            .calcularStockActual(p.id);
         setStateLocal(() {
           stockActual = stock;
           cargandoInfo = false;
@@ -121,59 +182,104 @@ class _CompraNuevaPantallaState extends State<CompraNuevaPantalla> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   DropdownButtonFormField<Producto>(
-                    initialValue: seleccionado,
+                    initialValue: () {
+                      if (baseId == null) return null;
+                      for (final b in bases) {
+                        if (b.id == baseId) return b;
+                      }
+                      return null;
+                    }(),
                     isExpanded: true,
-                    items: productos
+                    items: bases
                         .map(
                           (p) => DropdownMenuItem<Producto>(
-                        value: p,
-                        child: Row(
-                          children: [
-                            _miniaturaProducto(p),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                p.nombre,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    )
-                        .toList(),
-                    selectedItemBuilder: (context) {
-                      return productos.map((p) {
-                        return Align(
-                          alignment: Alignment.centerLeft,
-                          child: Row(
-                            children: [
-                              _miniaturaProducto(p),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Text(
-                                  p.nombre,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
+                            value: p,
+                            child: Row(
+                              children: [
+                                _miniaturaProducto(p),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    p.nombreConVariante,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
-                        );
-                      }).toList();
-                    },
+                        )
+                        .toList(),
                     onChanged: _guardando
                         ? null
                         : (p) {
-                      setStateLocal(() => seleccionado = p);
-                      if (p != null) {
-                        costoCtrl.text = p.costoActual.toStringAsFixed(2);
-                        cargarInfo(p, setStateLocal);
-                      }
-                    },
-                    decoration: const InputDecoration(labelText: 'Producto'),
+                            setStateLocal(() {
+                              baseId = p?.id;
+                              variantes = _variantesDeBase(activos, baseId);
+                              varianteId = null;
+                              seleccionado = _resolverProductoSeleccionado(
+                                productos: activos,
+                                baseId: baseId,
+                                varianteId: varianteId,
+                              );
+                            });
+                            if (seleccionado != null) {
+                              costoCtrl.text = seleccionado!.costoActual
+                                  .toStringAsFixed(2);
+                              cargarInfo(seleccionado!, setStateLocal);
+                            }
+                          },
+                    decoration: const InputDecoration(
+                      labelText: 'Producto base',
+                    ),
                   ),
+                  if (baseId != null && variantes.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<int>(
+                      initialValue: varianteId,
+                      isExpanded: true,
+                      items: variantes
+                          .map(
+                            (v) => DropdownMenuItem<int>(
+                              value: v.id,
+                              child: Row(
+                                children: [
+                                  _miniaturaProducto(v),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Text(
+                                      v.nombreConVariante,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: _guardando
+                          ? null
+                          : (id) {
+                              setStateLocal(() {
+                                varianteId = id;
+                                seleccionado = _resolverProductoSeleccionado(
+                                  productos: activos,
+                                  baseId: baseId,
+                                  varianteId: varianteId,
+                                );
+                              });
+                              if (seleccionado != null) {
+                                costoCtrl.text = seleccionado!.costoActual
+                                    .toStringAsFixed(2);
+                                cargarInfo(seleccionado!, setStateLocal);
+                              }
+                            },
+                      decoration: const InputDecoration(
+                        labelText: 'Variante (opcional)',
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 12),
                   if (seleccionado != null) ...[
                     if (cargandoInfo)
@@ -185,7 +291,7 @@ class _CompraNuevaPantallaState extends State<CompraNuevaPantalla> {
                       Align(
                         alignment: Alignment.centerLeft,
                         child: Text(
-                          'Stock actual: ${(stockActual ?? 0).toStringAsFixed(2)} ${seleccionado!.unidad}',
+                          'Stock actual: ${Formatos.cantidad((stockActual ?? 0), unidad: seleccionado!.unidad)} ${seleccionado!.unidad}',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -194,7 +300,7 @@ class _CompraNuevaPantallaState extends State<CompraNuevaPantalla> {
                     Align(
                       alignment: Alignment.centerLeft,
                       child: Text(
-                        'Costo actual guardado: ${Formatos.dinero(_moneda, costoActual ?? 0)}',
+                        'Costo promedio actual: ${Formatos.dinero(_moneda, costoActual ?? 0)}',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -203,14 +309,20 @@ class _CompraNuevaPantallaState extends State<CompraNuevaPantalla> {
                   ],
                   TextField(
                     controller: cantidadCtrl,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
                     decoration: const InputDecoration(labelText: 'Cantidad'),
                   ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: costoCtrl,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    decoration: InputDecoration(labelText: 'Costo unitario ($_moneda)'),
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    decoration: InputDecoration(
+                      labelText: 'Costo unitario ($_moneda)',
+                    ),
                   ),
                 ],
               ),
@@ -231,13 +343,36 @@ class _CompraNuevaPantallaState extends State<CompraNuevaPantalla> {
     );
 
     if (ok != true) return;
-    if (seleccionado == null) return;
 
-    final cant = double.tryParse(cantidadCtrl.text.trim().replaceAll(',', '.'));
-    final costo = double.tryParse(costoCtrl.text.trim().replaceAll(',', '.'));
+    final errProducto = AppValidaciones.validarSeleccion(
+      seleccionado,
+      campo: 'Producto',
+    );
+    if (errProducto != null) {
+      _mostrarErrorValidacion(errProducto);
+      return;
+    }
 
-    if (cant == null || cant <= 0) return;
-    if (costo == null || costo < 0) return;
+    final errCant = AppValidaciones.validarNumeroMayorQueCero(
+      cantidadCtrl.text,
+      campo: 'Cantidad',
+    );
+    if (errCant != null) {
+      _mostrarErrorValidacion(errCant);
+      return;
+    }
+
+    final errCosto = AppValidaciones.validarNumeroNoNegativo(
+      costoCtrl.text,
+      campo: 'Costo unitario',
+    );
+    if (errCosto != null) {
+      _mostrarErrorValidacion(errCosto);
+      return;
+    }
+
+    final cant = AppValidaciones.parseNumero(cantidadCtrl.text)!;
+    final costo = AppValidaciones.parseNumero(costoCtrl.text)!;
 
     setState(() {
       final idx = _lineas.indexWhere((x) => x.productoId == seleccionado!.id);
@@ -256,7 +391,7 @@ class _CompraNuevaPantallaState extends State<CompraNuevaPantalla> {
         _lineas.add(
           _LineaTmp(
             productoId: seleccionado!.id,
-            nombre: seleccionado!.nombre,
+            nombre: seleccionado!.nombreConVariante,
             unidad: seleccionado!.unidad,
             cantidad: cant,
             costoUnitario: costo,
@@ -271,19 +406,144 @@ class _CompraNuevaPantallaState extends State<CompraNuevaPantalla> {
     setState(() => _lineas.removeAt(index));
   }
 
+  Future<void> _editarLineaRapida(int index) async {
+    if (_guardando || index < 0 || index >= _lineas.length) return;
+
+    final linea = _lineas[index];
+    final cantidadCtrl = TextEditingController(
+      text: linea.cantidad.toStringAsFixed(2),
+    );
+    final costoCtrl = TextEditingController(
+      text: linea.costoUnitario.toStringAsFixed(2),
+    );
+
+    final ok = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      builder: (context) {
+        final bottom = MediaQuery.of(context).viewInsets.bottom;
+        return Padding(
+          padding: EdgeInsets.fromLTRB(16, 8, 16, 16 + bottom),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                linea.nombre,
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: cantidadCtrl,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                decoration: InputDecoration(
+                  labelText: 'Cantidad (${linea.unidad})',
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: costoCtrl,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                decoration: InputDecoration(
+                  labelText: 'Costo unitario ($_moneda)',
+                ),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(context, false),
+                      child: const Text('Cancelar'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: FilledButton(
+                      onPressed: () => Navigator.pop(context, true),
+                      child: const Text('Guardar'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    if (ok != true) return;
+
+    final errCant = AppValidaciones.validarNumeroMayorQueCero(
+      cantidadCtrl.text,
+      campo: 'Cantidad',
+    );
+    if (errCant != null) {
+      _mostrarErrorValidacion(errCant);
+      return;
+    }
+
+    final errCosto = AppValidaciones.validarNumeroNoNegativo(
+      costoCtrl.text,
+      campo: 'Costo unitario',
+    );
+    if (errCosto != null) {
+      _mostrarErrorValidacion(errCosto);
+      return;
+    }
+
+    final cant = AppValidaciones.parseNumero(cantidadCtrl.text)!;
+    final costo = AppValidaciones.parseNumero(costoCtrl.text)!;
+
+    setState(() {
+      if (index < 0 || index >= _lineas.length) return;
+      final actual = _lineas[index];
+      _lineas[index] = _LineaTmp(
+        productoId: actual.productoId,
+        nombre: actual.nombre,
+        unidad: actual.unidad,
+        cantidad: cant,
+        costoUnitario: costo,
+        imagen: actual.imagen,
+      );
+    });
+  }
+
   Future<void> _confirmarCompra() async {
     setState(() => _error = null);
 
     if (_lineas.isEmpty) {
-      setState(() => _error = 'Agregá al menos un producto');
+      setState(() => _error = 'Agrega al menos un producto');
       return;
     }
+
+    final errEnvio = AppValidaciones.validarNumeroNoNegativo(
+      _envioCtrl.text,
+      campo: 'Envio o cargo adicional',
+    );
+    if (errEnvio != null) {
+      setState(() => _error = errEnvio);
+      return;
+    }
+
+    final envioMonto = _envioMonto;
 
     setState(() => _guardando = true);
 
     try {
       final compraId = await Proveedores.comprasRepositorio.crearCompra(
-        proveedor: _proveedorCtrl.text.trim().isEmpty ? null : _proveedorCtrl.text.trim(),
+        proveedor: _proveedorCtrl.text.trim().isEmpty
+            ? null
+            : _proveedorCtrl.text.trim(),
+        envioMonto: envioMonto,
         total: 0,
         nota: _notaCtrl.text.trim().isEmpty ? null : _notaCtrl.text.trim(),
       );
@@ -293,9 +553,14 @@ class _CompraNuevaPantallaState extends State<CompraNuevaPantalla> {
       for (final l in _lineas) {
         total += l.subtotal;
 
-        final prod = await Proveedores.inventarioRepositorio.obtenerProducto(l.productoId);
-        final stockAnterior =
-            (prod == null) ? 0.0 : await Proveedores.inventarioRepositorio.calcularStockActual(prod.id);
+        final prod = await Proveedores.inventarioRepositorio.obtenerProducto(
+          l.productoId,
+        );
+        final stockAnterior = (prod == null)
+            ? 0.0
+            : await Proveedores.inventarioRepositorio.calcularStockActual(
+                prod.id,
+              );
 
         await Proveedores.comprasRepositorio.agregarLinea(
           compraId: compraId,
@@ -322,7 +587,9 @@ class _CompraNuevaPantallaState extends State<CompraNuevaPantalla> {
           if (stockAnterior <= 0 || costoAnterior <= 0 || stockNuevo <= 0) {
             costoNuevo = costoCompra;
           } else {
-            costoNuevo = ((stockAnterior * costoAnterior) + (comprado * costoCompra)) / stockNuevo;
+            costoNuevo =
+                ((stockAnterior * costoAnterior) + (comprado * costoCompra)) /
+                stockNuevo;
           }
 
           await Proveedores.inventarioRepositorio.actualizarProducto(
@@ -340,11 +607,16 @@ class _CompraNuevaPantallaState extends State<CompraNuevaPantalla> {
 
       await Proveedores.comprasRepositorio.actualizarTotalCompra(
         compraId: compraId,
-        total: total,
+        total: total + envioMonto,
       );
 
       if (!mounted) return;
-      Navigator.pop(context);
+      Proveedores.notificarDatosActualizados();
+      if (widget.embebido && widget.onCreada != null) {
+        widget.onCreada!(compraId);
+      } else {
+        Navigator.pop(context, compraId);
+      }
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -367,7 +639,9 @@ class _CompraNuevaPantallaState extends State<CompraNuevaPantalla> {
           TextField(
             controller: _proveedorCtrl,
             enabled: !_guardando,
-            decoration: const InputDecoration(labelText: 'Proveedor (opcional)'),
+            decoration: const InputDecoration(
+              labelText: 'Proveedor (opcional)',
+            ),
           ),
           const SizedBox(height: 12),
           TextField(
@@ -376,8 +650,17 @@ class _CompraNuevaPantallaState extends State<CompraNuevaPantalla> {
             decoration: const InputDecoration(labelText: 'Nota (opcional)'),
           ),
           const SizedBox(height: 12),
+          TextField(
+            controller: _envioCtrl,
+            enabled: !_guardando,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: InputDecoration(
+              labelText: 'Envio o cargo adicional ($_moneda)',
+            ),
+          ),
+          const SizedBox(height: 12),
 
-          // BOTÓN ARRIBA (no flotante)
+          // BOTON ARRIBA (no flotante)
           SizedBox(
             width: double.infinity,
             child: FilledButton.icon(
@@ -393,7 +676,7 @@ class _CompraNuevaPantallaState extends State<CompraNuevaPantalla> {
           if (_lineas.isEmpty)
             const Padding(
               padding: EdgeInsets.only(top: 18),
-              child: Center(child: Text('Agregá productos a la compra')),
+              child: Center(child: Text('Agrega productos a la compra')),
             )
           else
             ListView.separated(
@@ -420,14 +703,14 @@ class _CompraNuevaPantallaState extends State<CompraNuevaPantalla> {
                     child: ListTile(
                       leading: okImg
                           ? ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: Image.file(
-                          File(ruta),
-                          width: 40,
-                          height: 40,
-                          fit: BoxFit.cover,
-                        ),
-                      )
+                              borderRadius: BorderRadius.circular(8),
+                              child: Image.file(
+                                File(ruta),
+                                width: 40,
+                                height: 40,
+                                fit: BoxFit.cover,
+                              ),
+                            )
                           : const Icon(Icons.image_outlined),
                       title: Text(
                         l.nombre,
@@ -435,8 +718,8 @@ class _CompraNuevaPantallaState extends State<CompraNuevaPantalla> {
                         overflow: TextOverflow.ellipsis,
                       ),
                       subtitle: Text(
-                        'Cantidad: ${l.cantidad.toStringAsFixed(2)} ${l.unidad}\n'
-                            'Costo: ${Formatos.dinero(_moneda, l.costoUnitario)}',
+                        'Cantidad: ${Formatos.cantidad(l.cantidad, unidad: l.unidad)} ${l.unidad}\n'
+                        'Costo: ${Formatos.dinero(_moneda, l.costoUnitario)}',
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -444,6 +727,7 @@ class _CompraNuevaPantallaState extends State<CompraNuevaPantalla> {
                         Formatos.dinero(_moneda, l.subtotal),
                         style: Theme.of(context).textTheme.titleMedium,
                       ),
+                      onTap: _guardando ? null : () => _editarLineaRapida(i),
                     ),
                   ),
                 );
@@ -453,7 +737,27 @@ class _CompraNuevaPantallaState extends State<CompraNuevaPantalla> {
           const SizedBox(height: 12),
           Row(
             children: [
-              const Expanded(child: Text('Total')),
+              const Expanded(child: Text('Subtotal productos')),
+              Text(
+                Formatos.dinero(_moneda, _subtotal),
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              const Expanded(child: Text('Envio / cargo adicional')),
+              Text(
+                Formatos.dinero(_moneda, _envioMonto),
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              const Expanded(child: Text('Total final')),
               Text(
                 Formatos.dinero(_moneda, _total),
                 style: Theme.of(context).textTheme.titleLarge,
@@ -496,12 +800,42 @@ class _CompraNuevaPantallaState extends State<CompraNuevaPantalla> {
     return LayoutBuilder(
       builder: (context, c) {
         final esTablet = c.maxWidth >= _kTablet;
+        final body = SafeArea(child: _contenido(context, esTablet: esTablet));
+        if (widget.embebido) {
+          return Padding(
+            padding: const EdgeInsets.all(12),
+            child: Card(
+              clipBehavior: Clip.antiAlias,
+              child: Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 8, 8, 0),
+                    child: Row(
+                      children: [
+                        Text(
+                          'Nueva compra',
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
+                        const Spacer(),
+                        IconButton(
+                          onPressed: _guardando ? null : widget.onCancelar,
+                          icon: const Icon(Icons.close),
+                          tooltip: 'Cerrar',
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Divider(height: 1),
+                  Expanded(child: body),
+                ],
+              ),
+            ),
+          );
+        }
 
         return Scaffold(
           appBar: AppBar(title: const Text('Nueva compra')),
-          body: SafeArea(
-            child: _contenido(context, esTablet: esTablet),
-          ),
+          body: body,
         );
       },
     );

@@ -14,6 +14,7 @@ class Pedido {
   final double subtotal;
   final double total;
 
+  final bool stockDescontado;
   final int? ventaId; // se setea al entregar
 
   const Pedido({
@@ -27,11 +28,13 @@ class Pedido {
     required this.estado,
     required this.subtotal,
     required this.total,
+    required this.stockDescontado,
     required this.ventaId,
   });
 
   bool get cancelado => estado == PedidoEstado.cancelado;
   bool get entregado => estado == PedidoEstado.entregado;
+  bool get preparado => estado == PedidoEstado.preparado;
 
   Pedido copyWith({
     DateTime? fecha,
@@ -43,6 +46,7 @@ class Pedido {
     PedidoEstado? estado,
     double? subtotal,
     double? total,
+    bool? stockDescontado,
     int? ventaId,
   }) {
     return Pedido(
@@ -56,6 +60,7 @@ class Pedido {
       estado: estado ?? this.estado,
       subtotal: subtotal ?? this.subtotal,
       total: total ?? this.total,
+      stockDescontado: stockDescontado ?? this.stockDescontado,
       ventaId: ventaId ?? this.ventaId,
     );
   }

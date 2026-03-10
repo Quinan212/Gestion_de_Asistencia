@@ -28,7 +28,9 @@ class CombosControlador extends ChangeNotifier {
 
       _estado = _estado.copiarCon(cargando: false, combos: visibles, error: null);
       notifyListeners();
-    } catch (_) {
+    } catch (e, st) {
+      debugPrint('CombosControlador.cargar error: ${e.toString()}');
+      debugPrintStack(stackTrace: st);
       _estado = _estado.copiarCon(
         cargando: false,
         error: 'No se pudieron cargar los combos',
@@ -51,7 +53,9 @@ class CombosControlador extends ChangeNotifier {
       final id = await _repo.crearCombo(nombre: nombre, precioVenta: precioVenta);
       await cargar();
       return id;
-    } catch (_) {
+    } catch (e, st) {
+      debugPrint('CombosControlador.crearComboRapido error: ${e.toString()}');
+      debugPrintStack(stackTrace: st);
       _estado = _estado.copiarCon(error: 'No se pudo crear el combo');
       notifyListeners();
       return null;

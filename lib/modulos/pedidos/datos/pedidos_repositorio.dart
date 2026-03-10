@@ -25,7 +25,7 @@ class StockInsuficientePedido implements Exception {
   final List<FaltanteStock> faltantes;
 
   const StockInsuficientePedido({
-    this.titulo = 'No podés crear este pedido',
+    this.titulo = 'No podes crear este pedido',
     required this.faltantes,
   });
 
@@ -36,6 +36,20 @@ class StockInsuficientePedido implements Exception {
 class PedidosRepositorio {
   final BaseDeDatos db;
   PedidosRepositorio(this.db);
+
+  String _nombreProductoConVariante(TablaProducto? p, int productoId) {
+    final base = (p?.nombre ?? '').trim();
+    final variante = (p?.variante ?? '').trim();
+    final subvariante = (p?.subvariante ?? '').trim();
+
+    if (base.isEmpty) return 'Producto $productoId';
+    if (variante.isEmpty && subvariante.isEmpty) return base;
+    if (variante.isNotEmpty && subvariante.isEmpty) return '$base - $variante';
+    if (variante.isEmpty && subvariante.isNotEmpty) {
+      return '$base - $subvariante';
+    }
+    return '$base - $variante - $subvariante';
+  }
 
   // -------------------- mappers --------------------
 
@@ -51,28 +65,16 @@ class PedidosRepositorio {
       estado: PedidoEstadoX.fromCode(row.estado),
       subtotal: row.subtotal,
       total: row.total,
+      stockDescontado: row.stockDescontado,
       ventaId: row.ventaId,
-    );
-  }
-
-  LineaPedido _mapLinea(TablaLineasPedidoData row) {
-    return LineaPedido(
-      id: row.id,
-      pedidoId: row.pedidoId,
-      comboId: row.comboId,
-      productoId: row.productoId,
-      nombre: row.nombre,
-      unidad: row.unidad,
-      cantidad: row.cantidad,
-      precioUnitario: row.precioUnitario,
-      subtotal: row.subtotal,
     );
   }
 
   // -------------------- lecturas --------------------
 
   Future<List<Pedido>> listarPedidos() async {
-    final q = db.select(db.tablaPedidos)..orderBy([(t) => OrderingTerm.desc(t.fecha)]);
+    final q = db.select(db.tablaPedidos)
+      ..orderBy([(t) => OrderingTerm.desc(t.fecha)]);
     final rows = await q.get();
     return rows.map(_mapPedido).toList();
   }
@@ -84,12 +86,65 @@ class PedidosRepositorio {
     return _mapPedido(row);
   }
 
+  Future<Pedido?> obtenerPedidoPorVentaId(int ventaId) async {
+    final q = db.select(db.tablaPedidos)
+      ..where((t) => t.ventaId.equals(ventaId))
+      ..orderBy([(t) => OrderingTerm.desc(t.id)])
+      ..limit(1);
+    final row = await q.getSingleOrNull();
+    if (row == null) return null;
+    return _mapPedido(row);
+  }
+
   Future<List<LineaPedido>> listarLineas(int pedidoId) async {
     final q = db.select(db.tablaLineasPedido)
       ..where((t) => t.pedidoId.equals(pedidoId))
       ..orderBy([(t) => OrderingTerm.asc(t.id)]);
     final rows = await q.get();
-    return rows.map(_mapLinea).toList();
+
+    final idsProductos = rows
+        .map((r) => r.productoId)
+        .whereType<int>()
+        .toSet()
+        .toList();
+
+    final prodPorId = <int, TablaProducto>{};
+    if (idsProductos.isNotEmpty) {
+      final prods = await (db.select(
+        db.tablaProductos,
+      )..where((t) => t.id.isIn(idsProductos))).get();
+      for (final p in prods) {
+        prodPorId[p.id] = p;
+      }
+    }
+
+    return rows.map((row) {
+      final productoId = row.productoId;
+      String nombre = row.nombre;
+      if (productoId != null) {
+        final actual = _nombreProductoConVariante(
+          prodPorId[productoId],
+          productoId,
+        );
+        final nombreGuardado = row.nombre.trim();
+        if (nombreGuardado.isEmpty ||
+            nombreGuardado == 'Producto $productoId') {
+          nombre = actual;
+        }
+      }
+
+      return LineaPedido(
+        id: row.id,
+        pedidoId: row.pedidoId,
+        comboId: row.comboId,
+        productoId: row.productoId,
+        nombre: nombre,
+        unidad: row.unidad,
+        cantidad: row.cantidad,
+        precioUnitario: row.precioUnitario,
+        subtotal: row.subtotal,
+      );
+    }).toList();
   }
 
   // -------------------- stock helpers --------------------
@@ -106,7 +161,7 @@ class PedidosRepositorio {
     double stock = 0.0;
     for (final r in rows) {
       final tipo = (r.read(m.tipo) ?? '').toString().toLowerCase();
-      final cant = (r.read(m.cantidad) as double?) ?? 0.0;
+      final cant = r.read(m.cantidad) ?? 0.0;
 
       if (tipo == 'ingreso') stock += cant;
       if (tipo == 'egreso') stock -= cant;
@@ -122,13 +177,17 @@ class PedidosRepositorio {
     return out;
   }
 
-  Future<List<FaltanteStock>> _faltantesPorConsumo(Map<int, double> consumo) async {
+  Future<List<FaltanteStock>> _faltantesPorConsumo(
+    Map<int, double> consumo,
+  ) async {
     if (consumo.isEmpty) return const [];
 
     final ids = consumo.keys.toSet();
     final stocks = await _stockActualMuchos(ids);
 
-    final productos = await (db.select(db.tablaProductos)..where((t) => t.id.isIn(ids))).get();
+    final productos = await (db.select(
+      db.tablaProductos,
+    )..where((t) => t.id.isIn(ids))).get();
     final prodPorId = {for (final p in productos) p.id: p};
 
     final faltantes = <FaltanteStock>[];
@@ -140,7 +199,7 @@ class PedidosRepositorio {
       final stock = stocks[productoId] ?? 0.0;
       if (stock + 1e-9 < necesita) {
         final p = prodPorId[productoId];
-        final nombre = (p?.nombre ?? 'Producto $productoId').trim();
+        final nombre = _nombreProductoConVariante(p, productoId).trim();
         final unidad = (p?.unidad ?? '').trim();
 
         faltantes.add(
@@ -164,8 +223,9 @@ class PedidosRepositorio {
   }
 
   Future<int> maxCombosVendibles(int comboId) async {
-    final comps =
-    await (db.select(db.tablaComponentes)..where((t) => t.comboId.equals(comboId))).get();
+    final comps = await (db.select(
+      db.tablaComponentes,
+    )..where((t) => t.comboId.equals(comboId))).get();
     if (comps.isEmpty) return 0;
 
     final productoIds = comps.map((c) => c.productoId).toSet();
@@ -190,8 +250,9 @@ class PedidosRepositorio {
   }) async {
     final cant = cantidadCombos <= 0 ? 0.0 : cantidadCombos;
 
-    final comps =
-    await (db.select(db.tablaComponentes)..where((t) => t.comboId.equals(comboId))).get();
+    final comps = await (db.select(
+      db.tablaComponentes,
+    )..where((t) => t.comboId.equals(comboId))).get();
     if (comps.isEmpty) return const [];
 
     final consumo = <int, double>{};
@@ -204,7 +265,9 @@ class PedidosRepositorio {
     return _faltantesPorConsumo(consumo);
   }
 
-  Future<Map<int, double>> _consumoPorLineasPedido(List<TablaLineasPedidoData> lineas) async {
+  Future<Map<int, double>> _consumoPorLineasPedido(
+    List<TablaLineasPedidoData> lineas,
+  ) async {
     final consumo = <int, double>{};
     final compCache = <int, List<dynamic>>{};
 
@@ -220,8 +283,11 @@ class PedidosRepositorio {
 
       if (cId == null) continue;
 
-      final comps = compCache[cId] ??
-          await (db.select(db.tablaComponentes)..where((t) => t.comboId.equals(cId))).get();
+      final comps =
+          compCache[cId] ??
+          await (db.select(
+            db.tablaComponentes,
+          )..where((t) => t.comboId.equals(cId))).get();
 
       compCache[cId] = comps;
 
@@ -239,8 +305,87 @@ class PedidosRepositorio {
     return consumo;
   }
 
-  // -------------------- creación --------------------
+  // -------------------- creacion --------------------
 
+  Future<void> _descontarStockDePedido({
+    required int pedidoId,
+    required List<TablaLineasPedidoData> lineas,
+  }) async {
+    final consumo = await _consumoPorLineasPedido(lineas);
+    await _asegurarStockSuficiente(consumo);
+
+    for (final e in consumo.entries) {
+      final cant = e.value;
+      if (cant == 0) continue;
+
+      await db
+          .into(db.tablaMovimientos)
+          .insert(
+            TablaMovimientosCompanion.insert(
+              productoId: e.key,
+              tipo: 'egreso',
+              cantidad: cant,
+              nota: const Value('PEDIDO PREPARADO'),
+              referencia: Value('pedido:$pedidoId'),
+            ),
+          );
+    }
+  }
+
+  Future<void> _revertirStockDePedidoPreparado({required int pedidoId}) async {
+    final egresos =
+        await (db.select(db.tablaMovimientos)..where(
+              (m) =>
+                  m.referencia.equals('pedido:$pedidoId') &
+                  m.tipo.equals('egreso'),
+            ))
+            .get();
+
+    if (egresos.isEmpty) return;
+
+    final yaRevertido =
+        await (db.select(db.tablaMovimientos)..where(
+              (m) =>
+                  m.referencia.equals('pedido:$pedidoId') &
+                  m.tipo.equals('ingreso') &
+                  m.nota.like('%REVERSION PREPARADO%'),
+            ))
+            .getSingleOrNull();
+
+    if (yaRevertido != null) return;
+
+    for (final m in egresos) {
+      final cant = m.cantidad;
+      if (cant == 0) continue;
+
+      await db
+          .into(db.tablaMovimientos)
+          .insert(
+            TablaMovimientosCompanion.insert(
+              productoId: m.productoId,
+              tipo: 'ingreso',
+              cantidad: cant,
+              nota: const Value('REVERSION PREPARADO'),
+              referencia: Value('pedido:$pedidoId'),
+            ),
+          );
+    }
+  }
+
+  Future<bool> _pedidoTieneStockDescontadoReal(int pedidoId) async {
+    final mov =
+        await (db.select(db.tablaMovimientos)
+              ..where(
+                (m) =>
+                    m.referencia.equals('pedido:$pedidoId') &
+                    m.tipo.equals('egreso'),
+              )
+              ..limit(1))
+            .getSingleOrNull();
+    return mov != null;
+  }
+
+  // -------------------- creacion --------------------
   Future<int> crearPedidoPorCombo({
     required int comboId,
     required double cantidad,
@@ -254,8 +399,9 @@ class PedidosRepositorio {
     final cant = cantidad <= 0 ? 1.0 : cantidad;
     final envio = envioMonto < 0 ? 0.0 : envioMonto;
 
-    final combo =
-    await (db.select(db.tablaCombos)..where((t) => t.id.equals(comboId))).getSingleOrNull();
+    final combo = await (db.select(
+      db.tablaCombos,
+    )..where((t) => t.id.equals(comboId))).getSingleOrNull();
     if (combo == null) throw StateError('Combo no encontrado');
 
     final precioUnit = combo.precioVenta;
@@ -263,39 +409,49 @@ class PedidosRepositorio {
     final total = sub + envio;
 
     return db.transaction(() async {
-      final estado =
-      crearEnEncargadoYReservar ? PedidoEstado.encargado.code : PedidoEstado.borrador.code;
+      final estado = crearEnEncargadoYReservar
+          ? PedidoEstado.encargado.code
+          : PedidoEstado.borrador.code;
 
       if (crearEnEncargadoYReservar) {
-        final falt = await faltantesParaCombo(comboId: comboId, cantidadCombos: cant);
+        final falt = await faltantesParaCombo(
+          comboId: comboId,
+          cantidadCombos: cant,
+        );
         if (falt.isNotEmpty) throw StockInsuficientePedido(faltantes: falt);
       }
 
-      final pedidoId = await db.into(db.tablaPedidos).insert(
-        TablaPedidosCompanion.insert(
-          cliente: Value((cliente ?? '').trim().isEmpty ? null : cliente!.trim()),
-          nota: Value((nota ?? '').trim().isEmpty ? null : nota!.trim()),
-          envioMonto: Value(envio),
-          medioPago: Value(medioPago.trim()),
-          estadoPago: Value(estadoPago.trim()),
-          estado: Value(estado),
-          subtotal: Value(sub),
-          total: Value(total),
-        ),
-      );
+      final pedidoId = await db
+          .into(db.tablaPedidos)
+          .insert(
+            TablaPedidosCompanion.insert(
+              cliente: Value(
+                (cliente ?? '').trim().isEmpty ? null : cliente!.trim(),
+              ),
+              nota: Value((nota ?? '').trim().isEmpty ? null : nota!.trim()),
+              envioMonto: Value(envio),
+              medioPago: Value(medioPago.trim()),
+              estadoPago: Value(estadoPago.trim()),
+              estado: Value(estado),
+              subtotal: Value(sub),
+              total: Value(total),
+            ),
+          );
 
-      await db.into(db.tablaLineasPedido).insert(
-        TablaLineasPedidoCompanion.insert(
-          pedidoId: pedidoId,
-          comboId: Value(comboId),
-          productoId: const Value.absent(),
-          nombre: combo.nombre,
-          unidad: 'combo',
-          cantidad: cant,
-          precioUnitario: Value(precioUnit),
-          subtotal: Value(sub),
-        ),
-      );
+      await db
+          .into(db.tablaLineasPedido)
+          .insert(
+            TablaLineasPedidoCompanion.insert(
+              pedidoId: pedidoId,
+              comboId: Value(comboId),
+              productoId: const Value.absent(),
+              nombre: combo.nombre,
+              unidad: 'combo',
+              cantidad: cant,
+              precioUnitario: Value(precioUnit),
+              subtotal: Value(sub),
+            ),
+          );
 
       return pedidoId;
     });
@@ -310,7 +466,7 @@ class PedidosRepositorio {
     required String estadoPago,
     required bool crearEnEncargadoYReservar,
   }) async {
-    if (lineas.isEmpty) throw ArgumentError('lineas vacías');
+    if (lineas.isEmpty) throw ArgumentError('lineas vacias');
 
     final envio = envioMonto < 0 ? 0.0 : envioMonto;
 
@@ -323,8 +479,9 @@ class PedidosRepositorio {
     final total = subtotal + envio;
 
     return db.transaction(() async {
-      final estado =
-      crearEnEncargadoYReservar ? PedidoEstado.encargado.code : PedidoEstado.borrador.code;
+      final estado = crearEnEncargadoYReservar
+          ? PedidoEstado.encargado.code
+          : PedidoEstado.borrador.code;
 
       if (crearEnEncargadoYReservar) {
         final consumo = <int, double>{};
@@ -336,18 +493,22 @@ class PedidosRepositorio {
         await _asegurarStockSuficiente(consumo);
       }
 
-      final pedidoId = await db.into(db.tablaPedidos).insert(
-        TablaPedidosCompanion.insert(
-          cliente: Value((cliente ?? '').trim().isEmpty ? null : cliente!.trim()),
-          nota: Value((nota ?? '').trim().isEmpty ? null : nota!.trim()),
-          envioMonto: Value(envio),
-          medioPago: Value(medioPago.trim()),
-          estadoPago: Value(estadoPago.trim()),
-          estado: Value(estado),
-          subtotal: Value(subtotal),
-          total: Value(total),
-        ),
-      );
+      final pedidoId = await db
+          .into(db.tablaPedidos)
+          .insert(
+            TablaPedidosCompanion.insert(
+              cliente: Value(
+                (cliente ?? '').trim().isEmpty ? null : cliente!.trim(),
+              ),
+              nota: Value((nota ?? '').trim().isEmpty ? null : nota!.trim()),
+              envioMonto: Value(envio),
+              medioPago: Value(medioPago.trim()),
+              estadoPago: Value(estadoPago.trim()),
+              estado: Value(estado),
+              subtotal: Value(subtotal),
+              total: Value(total),
+            ),
+          );
 
       for (final l in lineas) {
         final cant = l.cantidad <= 0 ? 0.0 : l.cantidad;
@@ -356,18 +517,20 @@ class PedidosRepositorio {
         final pu = l.precioUnitario < 0 ? 0.0 : l.precioUnitario;
         final sub = cant * pu;
 
-        await db.into(db.tablaLineasPedido).insert(
-          TablaLineasPedidoCompanion.insert(
-            pedidoId: pedidoId,
-            comboId: const Value.absent(),
-            productoId: Value(l.productoId),
-            nombre: l.nombre,
-            unidad: l.unidad,
-            cantidad: cant,
-            precioUnitario: Value(pu),
-            subtotal: Value(sub),
-          ),
-        );
+        await db
+            .into(db.tablaLineasPedido)
+            .insert(
+              TablaLineasPedidoCompanion.insert(
+                pedidoId: pedidoId,
+                comboId: const Value.absent(),
+                productoId: Value(l.productoId),
+                nombre: l.nombre,
+                unidad: l.unidad,
+                cantidad: cant,
+                precioUnitario: Value(pu),
+                subtotal: Value(sub),
+              ),
+            );
       }
 
       return pedidoId;
@@ -381,15 +544,69 @@ class PedidosRepositorio {
     required PedidoEstado estado,
     required bool recalcularReservasSiEncargado,
   }) async {
-    await (db.update(db.tablaPedidos)..where((t) => t.id.equals(pedidoId))).write(
-      TablaPedidosCompanion(estado: Value(estado.code)),
-    );
-  }
+    final p = await (db.select(
+      db.tablaPedidos,
+    )..where((t) => t.id.equals(pedidoId))).getSingleOrNull();
+    if (p == null) throw StateError('Pedido no encontrado');
 
-  // -------------------- cancelación / venta cancelada --------------------
+    final actual = PedidoEstadoX.fromCode(p.estado);
+    if (actual == PedidoEstado.cancelado || actual == estado) return;
+
+    if (actual == PedidoEstado.entregado && estado != PedidoEstado.entregado) {
+      throw StateError('No se puede reabrir un pedido entregado');
+    }
+
+    if (estado == PedidoEstado.entregado) {
+      await marcarEntregadoYCrearVenta(pedidoId: pedidoId);
+      return;
+    }
+
+    if (estado == PedidoEstado.preparado) {
+      if (!p.stockDescontado) {
+        final lineas = await (db.select(
+          db.tablaLineasPedido,
+        )..where((t) => t.pedidoId.equals(pedidoId))).get();
+        await _descontarStockDePedido(pedidoId: pedidoId, lineas: lineas);
+      }
+
+      await (db.update(
+        db.tablaPedidos,
+      )..where((t) => t.id.equals(pedidoId))).write(
+        TablaPedidosCompanion(
+          estado: Value(PedidoEstado.preparado.code),
+          stockDescontado: const Value(true),
+        ),
+      );
+      return;
+    }
+
+    final stockDescontadoReal = await _pedidoTieneStockDescontadoReal(pedidoId);
+
+    if ((p.stockDescontado || stockDescontadoReal) &&
+        p.ventaId == null &&
+        (estado == PedidoEstado.borrador || estado == PedidoEstado.encargado)) {
+      await _revertirStockDePedidoPreparado(pedidoId: pedidoId);
+
+      await (db.update(
+        db.tablaPedidos,
+      )..where((t) => t.id.equals(pedidoId))).write(
+        TablaPedidosCompanion(
+          estado: Value(estado.code),
+          stockDescontado: const Value(false),
+        ),
+      );
+      return;
+    }
+
+    await (db.update(db.tablaPedidos)..where((t) => t.id.equals(pedidoId)))
+        .write(TablaPedidosCompanion(estado: Value(estado.code)));
+  }
+  // -------------------- cancelacion / venta cancelada --------------------
 
   Future<void> _marcarVentaCancelada(int ventaId) async {
-    final v = await (db.select(db.tablaVentas)..where((t) => t.id.equals(ventaId))).getSingleOrNull();
+    final v = await (db.select(
+      db.tablaVentas,
+    )..where((t) => t.id.equals(ventaId))).getSingleOrNull();
     if (v == null) return;
 
     final nota = (v.nota ?? '').trim();
@@ -406,18 +623,24 @@ class PedidosRepositorio {
     required int pedidoId,
     required int ventaId,
   }) async {
-    final egresos = await (db.select(db.tablaMovimientos)
-      ..where((m) => m.referencia.equals('venta:$ventaId') & m.tipo.equals('egreso')))
-        .get();
+    final egresos =
+        await (db.select(db.tablaMovimientos)..where(
+              (m) =>
+                  m.referencia.equals('venta:$ventaId') &
+                  m.tipo.equals('egreso'),
+            ))
+            .get();
 
     if (egresos.isEmpty) return;
 
-    final yaRevertido = await (db.select(db.tablaMovimientos)
-      ..where((m) =>
-      m.referencia.equals('venta:$ventaId') &
-      m.tipo.equals('ingreso') &
-      m.nota.like('%CANCELACIÓN%')))
-        .getSingleOrNull();
+    final yaRevertido =
+        await (db.select(db.tablaMovimientos)..where(
+              (m) =>
+                  m.referencia.equals('venta:$ventaId') &
+                  m.tipo.equals('ingreso') &
+                  m.nota.like('%CANCELACI%'),
+            ))
+            .getSingleOrNull();
 
     if (yaRevertido != null) return;
 
@@ -425,21 +648,27 @@ class PedidosRepositorio {
       final cant = m.cantidad;
       if (cant == 0) continue;
 
-      await db.into(db.tablaMovimientos).insert(
-        TablaMovimientosCompanion.insert(
-          productoId: m.productoId,
-          tipo: 'ingreso',
-          cantidad: cant,
-          nota: Value('CANCELACIÓN (pedido:$pedidoId • revierte venta:$ventaId)'),
-          referencia: Value('venta:$ventaId'),
-        ),
-      );
+      await db
+          .into(db.tablaMovimientos)
+          .insert(
+            TablaMovimientosCompanion.insert(
+              productoId: m.productoId,
+              tipo: 'ingreso',
+              cantidad: cant,
+              nota: Value(
+                'CANCELACION (pedido:$pedidoId - revierte venta:$ventaId)',
+              ),
+              referencia: Value('venta:$ventaId'),
+            ),
+          );
     }
   }
 
   Future<void> cancelarPedido({required int pedidoId}) async {
     await db.transaction(() async {
-      final p = await (db.select(db.tablaPedidos)..where((t) => t.id.equals(pedidoId))).getSingleOrNull();
+      final p = await (db.select(
+        db.tablaPedidos,
+      )..where((t) => t.id.equals(pedidoId))).getSingleOrNull();
       if (p == null) throw StateError('Pedido no encontrado');
 
       final est = PedidoEstadoX.fromCode(p.estado);
@@ -448,15 +677,28 @@ class PedidosRepositorio {
       final ventaId = p.ventaId;
       if (ventaId != null) {
         await _marcarVentaCancelada(ventaId);
+      }
+
+      final stockDescontadoReal = await _pedidoTieneStockDescontadoReal(
+        pedidoId,
+      );
+
+      if (stockDescontadoReal) {
+        await _revertirStockDePedidoPreparado(pedidoId: pedidoId);
+      } else if (ventaId != null) {
         await _revertirStockDeVenta(pedidoId: pedidoId, ventaId: ventaId);
       }
 
-      await (db.update(db.tablaPedidos)..where((t) => t.id.equals(pedidoId))).write(
-        TablaPedidosCompanion(estado: Value(PedidoEstado.cancelado.code)),
+      await (db.update(
+        db.tablaPedidos,
+      )..where((t) => t.id.equals(pedidoId))).write(
+        TablaPedidosCompanion(
+          estado: Value(PedidoEstado.cancelado.code),
+          stockDescontado: const Value(false),
+        ),
       );
     });
   }
-
   // -------------------- RETROACTIVO --------------------
 
   int? _extraerPedidoIdDeTexto(String texto) {
@@ -479,21 +721,23 @@ class PedidosRepositorio {
 
   Future<int> marcarVentasDePedidosCanceladosRetroactivo() async {
     return db.transaction(() async {
-      final pedidosCancelados = await (db.select(db.tablaPedidos)
-        ..where((p) => p.estado.equals(PedidoEstado.cancelado.code)))
-          .get();
+      final pedidosCancelados = await (db.select(
+        db.tablaPedidos,
+      )..where((p) => p.estado.equals(PedidoEstado.cancelado.code))).get();
 
       if (pedidosCancelados.isEmpty) return 0;
 
       final canceladosIds = pedidosCancelados.map((p) => p.id).toSet();
 
       // movimientos de venta con nota que mencione pedido:
-      final movs = await (db.select(db.tablaMovimientos)
-        ..where((m) =>
-        m.referencia.like('venta:%') &
-        m.nota.like('%pedido%') &
-        m.tipo.equals('egreso')))
-          .get();
+      final movs =
+          await (db.select(db.tablaMovimientos)..where(
+                (m) =>
+                    m.referencia.like('venta:%') &
+                    m.nota.like('%pedido%') &
+                    m.tipo.equals('egreso'),
+              ))
+              .get();
 
       final pedidoToVenta = <int, int>{};
       for (final m in movs) {
@@ -517,9 +761,8 @@ class PedidosRepositorio {
         await _marcarVentaCancelada(ventaId);
 
         if (p.ventaId == null) {
-          await (db.update(db.tablaPedidos)..where((x) => x.id.equals(pid))).write(
-            TablaPedidosCompanion(ventaId: Value(ventaId)),
-          );
+          await (db.update(db.tablaPedidos)..where((x) => x.id.equals(pid)))
+              .write(TablaPedidosCompanion(ventaId: Value(ventaId)));
         }
 
         tocadas++;
@@ -531,9 +774,13 @@ class PedidosRepositorio {
 
   Future<int> repararStockDeCanceladosRetroactivo() async {
     return db.transaction(() async {
-      final pedidosCancelados = await (db.select(db.tablaPedidos)
-        ..where((p) => p.estado.equals(PedidoEstado.cancelado.code) & p.ventaId.isNotNull()))
-          .get();
+      final pedidosCancelados =
+          await (db.select(db.tablaPedidos)..where(
+                (p) =>
+                    p.estado.equals(PedidoEstado.cancelado.code) &
+                    p.ventaId.isNotNull(),
+              ))
+              .get();
 
       int reparados = 0;
 
@@ -541,32 +788,42 @@ class PedidosRepositorio {
         final ventaId = p.ventaId;
         if (ventaId == null) continue;
 
-        final egresos = await (db.select(db.tablaMovimientos)
-          ..where((m) => m.referencia.equals('venta:$ventaId') & m.tipo.equals('egreso')))
-            .get();
+        final egresos =
+            await (db.select(db.tablaMovimientos)..where(
+                  (m) =>
+                      m.referencia.equals('venta:$ventaId') &
+                      m.tipo.equals('egreso'),
+                ))
+                .get();
         if (egresos.isEmpty) continue;
 
-        final yaRevertido = await (db.select(db.tablaMovimientos)
-          ..where((m) =>
-          m.referencia.equals('venta:$ventaId') &
-          m.tipo.equals('ingreso') &
-          m.nota.like('%CANCELACIÓN%')))
-            .getSingleOrNull();
+        final yaRevertido =
+            await (db.select(db.tablaMovimientos)..where(
+                  (m) =>
+                      m.referencia.equals('venta:$ventaId') &
+                      m.tipo.equals('ingreso') &
+                      m.nota.like('%CANCELACI%'),
+                ))
+                .getSingleOrNull();
         if (yaRevertido != null) continue;
 
         for (final m in egresos) {
           final cant = m.cantidad;
           if (cant == 0) continue;
 
-          await db.into(db.tablaMovimientos).insert(
-            TablaMovimientosCompanion.insert(
-              productoId: m.productoId,
-              tipo: 'ingreso',
-              cantidad: cant,
-              nota: Value('CANCELACIÓN (retroactiva) • pedido:${p.id} • revierte venta:$ventaId'),
-              referencia: Value('venta:$ventaId'),
-            ),
-          );
+          await db
+              .into(db.tablaMovimientos)
+              .insert(
+                TablaMovimientosCompanion.insert(
+                  productoId: m.productoId,
+                  tipo: 'ingreso',
+                  cantidad: cant,
+                  nota: Value(
+                    'CANCELACION (retroactiva) - pedido:${p.id} - revierte venta:$ventaId',
+                  ),
+                  referencia: Value('venta:$ventaId'),
+                ),
+              );
         }
 
         reparados++;
@@ -581,6 +838,7 @@ class PedidosRepositorio {
   String _notaVentaDesdePedido({
     required int pedidoId,
     required String? cliente,
+    required String? notaPedido,
     required String medioPago,
     required double envioMonto,
     required String estadoPago,
@@ -591,15 +849,18 @@ class PedidosRepositorio {
     final c = (cliente ?? '').trim();
     if (c.isNotEmpty) parts.add('Cliente: $c');
 
+    final nota = (notaPedido ?? '').trim();
+    if (nota.isNotEmpty) parts.add('Nota: $nota');
+
     final mp = medioPago.trim();
     if (mp.isNotEmpty) parts.add('Pago: $mp');
 
     final ep = estadoPago.trim();
     if (ep.isNotEmpty) parts.add('Estado pago: $ep');
 
-    if (envioMonto > 0) parts.add('Envío: $envioMonto');
+    if (envioMonto > 0) parts.add('Envio: $envioMonto');
 
-    return parts.join(' • ');
+    return parts.join(' - ');
   }
 
   Future<void> actualizarPago({
@@ -608,34 +869,43 @@ class PedidosRepositorio {
     String? estadoPago,
   }) async {
     await db.transaction(() async {
-      final pRow =
-      await (db.select(db.tablaPedidos)..where((t) => t.id.equals(pedidoId))).getSingleOrNull();
+      final pRow = await (db.select(
+        db.tablaPedidos,
+      )..where((t) => t.id.equals(pedidoId))).getSingleOrNull();
       if (pRow == null) throw StateError('Pedido no encontrado');
 
       final mp = medioPago?.trim();
       final ep = estadoPago?.trim();
 
-      await (db.update(db.tablaPedidos)..where((t) => t.id.equals(pedidoId))).write(
+      await (db.update(
+        db.tablaPedidos,
+      )..where((t) => t.id.equals(pedidoId))).write(
         TablaPedidosCompanion(
-          medioPago: (mp == null || mp.isEmpty) ? const Value.absent() : Value(mp),
-          estadoPago: (ep == null || ep.isEmpty) ? const Value.absent() : Value(ep),
+          medioPago: (mp == null || mp.isEmpty)
+              ? const Value.absent()
+              : Value(mp),
+          estadoPago: (ep == null || ep.isEmpty)
+              ? const Value.absent()
+              : Value(ep),
         ),
       );
 
       final ventaId = pRow.ventaId;
       if (ventaId != null) {
-        final p2 = await (db.select(db.tablaPedidos)..where((t) => t.id.equals(pedidoId))).getSingle();
+        final p2 = await (db.select(
+          db.tablaPedidos,
+        )..where((t) => t.id.equals(pedidoId))).getSingle();
         final notaVenta = _notaVentaDesdePedido(
           pedidoId: pedidoId,
           cliente: p2.cliente,
+          notaPedido: p2.nota,
           medioPago: p2.medioPago,
           envioMonto: p2.envioMonto,
           estadoPago: p2.estadoPago,
         );
 
-        await (db.update(db.tablaVentas)..where((t) => t.id.equals(ventaId))).write(
-          TablaVentasCompanion(nota: Value(notaVenta)),
-        );
+        await (db.update(db.tablaVentas)..where((t) => t.id.equals(ventaId)))
+            .write(TablaVentasCompanion(nota: Value(notaVenta)));
       }
     });
   }
@@ -647,66 +917,87 @@ class PedidosRepositorio {
     required String nombreProducto,
     required double precioUnitario,
   }) async {
-    final nombre = nombreProducto.trim().isEmpty ? 'Producto $productoId' : nombreProducto.trim();
+    final nombre = nombreProducto.trim().isEmpty
+        ? 'Producto $productoId'
+        : nombreProducto.trim();
 
-    final comboId = await db.into(db.tablaCombos).insert(
-      TablaCombosCompanion.insert(
-        nombre: nombre,
-        precioVenta: Value(precioUnitario),
-        activo: const Value(true),
-        creadoEn: Value(DateTime.now()),
-      ),
-    );
+    final comboId = await db
+        .into(db.tablaCombos)
+        .insert(
+          TablaCombosCompanion.insert(
+            nombre: nombre,
+            precioVenta: Value(precioUnitario),
+            activo: const Value(true),
+            creadoEn: Value(DateTime.now()),
+          ),
+        );
 
-    await db.into(db.tablaComponentes).insert(
-      TablaComponentesCompanion.insert(
-        comboId: comboId,
-        productoId: productoId,
-        cantidad: 1.0,
-      ),
-    );
+    await db
+        .into(db.tablaComponentes)
+        .insert(
+          TablaComponentesCompanion.insert(
+            comboId: comboId,
+            productoId: productoId,
+            cantidad: 1.0,
+          ),
+        );
 
     return comboId;
   }
+
   Future<bool> ventaEstaCancelada(int ventaId) async {
     final q = db.select(db.tablaPedidos)
-      ..where((p) =>
-      p.ventaId.equals(ventaId) &
-      p.estado.equals(PedidoEstado.cancelado.code))
+      ..where(
+        (p) =>
+            p.ventaId.equals(ventaId) &
+            p.estado.equals(PedidoEstado.cancelado.code),
+      )
       ..limit(1);
 
     final row = await q.getSingleOrNull();
     return row != null;
   }
+
   Future<void> marcarEntregadoYCrearVenta({required int pedidoId}) async {
     await db.transaction(() async {
-      final pRow =
-      await (db.select(db.tablaPedidos)..where((t) => t.id.equals(pedidoId))).getSingleOrNull();
+      final pRow = await (db.select(
+        db.tablaPedidos,
+      )..where((t) => t.id.equals(pedidoId))).getSingleOrNull();
       if (pRow == null) throw StateError('Pedido no encontrado');
 
       final estadoActual = PedidoEstadoX.fromCode(pRow.estado);
       if (estadoActual == PedidoEstado.cancelado) return;
-      if (estadoActual == PedidoEstado.entregado && pRow.ventaId != null) return;
+      if (estadoActual == PedidoEstado.entregado && pRow.ventaId != null) {
+        return;
+      }
 
-      final lineas =
-      await (db.select(db.tablaLineasPedido)..where((t) => t.pedidoId.equals(pedidoId))).get();
-      final consumo = await _consumoPorLineasPedido(lineas);
-      await _asegurarStockSuficiente(consumo);
+      final lineas = await (db.select(
+        db.tablaLineasPedido,
+      )..where((t) => t.pedidoId.equals(pedidoId))).get();
+      final stockDescontadoReal = await _pedidoTieneStockDescontadoReal(
+        pedidoId,
+      );
+      if (!pRow.stockDescontado && !stockDescontadoReal) {
+        throw StateError('Primero prepara el pedido para descontar stock');
+      }
 
       final notaVenta = _notaVentaDesdePedido(
         pedidoId: pedidoId,
         cliente: pRow.cliente,
+        notaPedido: pRow.nota,
         medioPago: pRow.medioPago,
         envioMonto: pRow.envioMonto,
         estadoPago: pRow.estadoPago,
       );
 
-      final ventaId = await db.into(db.tablaVentas).insert(
-        TablaVentasCompanion.insert(
-          total: Value(pRow.total),
-          nota: Value(notaVenta),
-        ),
-      );
+      final ventaId = await db
+          .into(db.tablaVentas)
+          .insert(
+            TablaVentasCompanion.insert(
+              total: Value(pRow.total),
+              nota: Value(notaVenta),
+            ),
+          );
 
       final combosPorId = <int, String>{};
 
@@ -727,55 +1018,36 @@ class PedidosRepositorio {
         final int comboIdFinal = comboId;
 
         if (!combosPorId.containsKey(comboIdFinal)) {
-          final c =
-          await (db.select(db.tablaCombos)..where((t) => t.id.equals(comboIdFinal))).getSingleOrNull();
+          final c = await (db.select(
+            db.tablaCombos,
+          )..where((t) => t.id.equals(comboIdFinal))).getSingleOrNull();
           if (c != null) {
             final n = c.nombre.trim();
             combosPorId[comboIdFinal] = n.isEmpty ? 'Combo $comboIdFinal' : n;
           }
         }
 
-        await db.into(db.tablaLineasVenta).insert(
-          TablaLineasVentaCompanion.insert(
-            ventaId: ventaId,
-            comboId: comboIdFinal,
-            productoId: const Value.absent(),
-            cantidad: l.cantidad,
-            precioUnitario: l.precioUnitario,
-            subtotal: l.subtotal,
-          ),
-        );
+        await db
+            .into(db.tablaLineasVenta)
+            .insert(
+              TablaLineasVentaCompanion.insert(
+                ventaId: ventaId,
+                comboId: comboIdFinal,
+                productoId: const Value.absent(),
+                cantidad: l.cantidad,
+                precioUnitario: l.precioUnitario,
+                subtotal: l.subtotal,
+              ),
+            );
       }
 
-      final lineasVenta =
-      await (db.select(db.tablaLineasVenta)..where((t) => t.ventaId.equals(ventaId))).get();
-
-      for (final lv in lineasVenta) {
-        final cId = lv.comboId;
-        final nombreCombo = (combosPorId[cId] ?? 'Combo $cId').trim();
-
-        final comps =
-        await (db.select(db.tablaComponentes)..where((t) => t.comboId.equals(cId))).get();
-        for (final c in comps) {
-          final cant = c.cantidad * lv.cantidad;
-          if (cant == 0) continue;
-
-          await db.into(db.tablaMovimientos).insert(
-            TablaMovimientosCompanion.insert(
-              productoId: c.productoId,
-              tipo: 'egreso',
-              cantidad: cant,
-              nota: Value('VENTA (pedido:$pedidoId • $nombreCombo)'),
-              referencia: Value('venta:$ventaId'),
-            ),
-          );
-        }
-      }
-
-      await (db.update(db.tablaPedidos)..where((t) => t.id.equals(pedidoId))).write(
+      await (db.update(
+        db.tablaPedidos,
+      )..where((t) => t.id.equals(pedidoId))).write(
         TablaPedidosCompanion(
           estado: Value(PedidoEstado.entregado.code),
           ventaId: Value(ventaId),
+          stockDescontado: const Value(true),
         ),
       );
     });

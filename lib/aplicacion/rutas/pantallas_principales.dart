@@ -1,12 +1,21 @@
 // lib/aplicacion/pantallas_principales.dart
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:gestion_de_stock/modulos/inventario/pantallas/inventario_pantalla.dart' as inv;
-import 'package:gestion_de_stock/modulos/combos/pantallas/combos_pantalla.dart' as cmb;
-import 'package:gestion_de_stock/modulos/pedidos/pantallas/pedidos_pantalla.dart' as ped;
-import 'package:gestion_de_stock/modulos/ventas/pantallas/ventas_pantalla.dart' as ven;
-import 'package:gestion_de_stock/modulos/compras/pantallas/compras_pantalla.dart' as com;
-import 'package:gestion_de_stock/modulos/reportes/pantallas/reportes_pantalla.dart' as rep;
+import 'package:gestion_de_asistencias/aplicacion/utiles/layout_app.dart';
+import 'package:gestion_de_asistencias/infraestructura/dep_inyeccion/proveedores.dart';
+import 'package:gestion_de_asistencias/modulos/inventario/pantallas/inventario_pantalla.dart'
+    as inv;
+import 'package:gestion_de_asistencias/modulos/combos/pantallas/combos_pantalla.dart'
+    as cmb;
+import 'package:gestion_de_asistencias/modulos/pedidos/pantallas/pedidos_pantalla.dart'
+    as ped;
+import 'package:gestion_de_asistencias/modulos/ventas/pantallas/ventas_pantalla.dart'
+    as ven;
+import 'package:gestion_de_asistencias/modulos/compras/pantallas/compras_pantalla.dart'
+    as com;
+import 'package:gestion_de_asistencias/modulos/reportes/pantallas/reportes_pantalla.dart'
+    as rep;
 
 class PantallasPrincipales extends StatefulWidget {
   const PantallasPrincipales({super.key});
@@ -16,16 +25,10 @@ class PantallasPrincipales extends StatefulWidget {
 }
 
 class _PantallasPrincipalesState extends State<PantallasPrincipales> {
+  static const _fixNotasVentasLegacyKey =
+      'fix_notas_ventas_legacy_cliente_pago_v2_done';
   int _indice = 0;
-
-  late final List<Widget> _pantallas = [
-    const inv.InventarioPantalla(),
-    const cmb.CombosPantalla(),
-    const ped.PedidosPantalla(),
-    const ven.VentasPantalla(),
-    const com.ComprasPantalla(),
-    const rep.ReportesPantalla(),
-  ];
+  late final VoidCallback _syncMsgListener;
 
   final List<String> _titulos = const [
     'Inventario',
@@ -35,16 +38,63 @@ class _PantallasPrincipalesState extends State<PantallasPrincipales> {
     'Compras',
     'Reportes',
   ];
+  final List<Widget> _pantallas = const [
+    inv.InventarioPantalla(),
+    cmb.CombosPantalla(),
+    ped.PedidosPantalla(),
+    ven.VentasPantalla(),
+    com.ComprasPantalla(),
+    rep.ReportesPantalla(),
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _syncMsgListener = () {
+      final msg = Proveedores.estadoSincronizacion.value;
+      if (!mounted || msg == null || msg.trim().isEmpty) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(msg)));
+        Proveedores.limpiarEstadoSincronizacion();
+      });
+    };
+    Proveedores.estadoSincronizacion.addListener(_syncMsgListener);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _runFixNotasVentasLegacyUnaVez();
+    });
+  }
+
+  @override
+  void dispose() {
+    Proveedores.estadoSincronizacion.removeListener(_syncMsgListener);
+    super.dispose();
+  }
+
+  Future<void> _runFixNotasVentasLegacyUnaVez() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final yaCorrio = prefs.getBool(_fixNotasVentasLegacyKey) ?? false;
+      if (yaCorrio) return;
+
+      await Proveedores.ventasRepositorio.normalizarNotasVentasLegacy();
+      await prefs.setBool(_fixNotasVentasLegacyKey, true);
+    } catch (_) {
+      // si falla no frenamos la app
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, c) {
         final w = c.maxWidth;
-        final esTablet = w >= 700;
-        final railExtendido = w >= 1000;
+        final esTablet = w >= LayoutApp.kNavigationTablet;
+        final railExtendido = w >= LayoutApp.kRailExtendida;
 
-        final body = _pantallas[_indice];
+        final body = IndexedStack(index: _indice, children: _pantallas);
 
         if (!esTablet) {
           return Scaffold(
@@ -95,8 +145,11 @@ class _PantallasPrincipalesState extends State<PantallasPrincipales> {
             children: [
               NavigationRail(
                 selectedIndex: _indice,
-                onDestinationSelected: (nuevo) => setState(() => _indice = nuevo),
+                onDestinationSelected: (nuevo) =>
+                    setState(() => _indice = nuevo),
                 extended: railExtendido,
+                minWidth: 68,
+                minExtendedWidth: 150,
                 destinations: const [
                   NavigationRailDestination(
                     icon: Icon(Icons.inventory_2_outlined),

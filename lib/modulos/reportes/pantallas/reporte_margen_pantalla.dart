@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
-import 'package:gestion_de_stock/aplicacion/utiles/formatos.dart';
-import 'package:gestion_de_stock/infraestructura/servicios/exportacion_csv.dart';
+import 'package:gestion_de_asistencias/aplicacion/utiles/formatos.dart';
+import 'package:gestion_de_asistencias/aplicacion/utiles/layout_app.dart';
+import 'package:gestion_de_asistencias/aplicacion/widgets/tablet_master_detail_layout.dart';
+import 'package:gestion_de_asistencias/infraestructura/servicios/exportacion_csv.dart';
 import '/infraestructura/dep_inyeccion/proveedores.dart';
 import '/modulos/inventario/modelos/producto.dart';
 
@@ -15,7 +17,7 @@ class ReporteMargenPantalla extends StatefulWidget {
 }
 
 class _ReporteMargenPantallaState extends State<ReporteMargenPantalla> {
-  static const double _kTablet = 900;
+  static const double _kTablet = LayoutApp.kTablet;
 
   bool _cargando = true;
   String? _error;
@@ -43,7 +45,9 @@ class _ReporteMargenPantallaState extends State<ReporteMargenPantalla> {
       final m = await Formatos.leerMoneda();
       if (mounted) _moneda = m;
 
-      final combos = await Proveedores.combosRepositorio.listarCombos(incluirInactivos: true);
+      final combos = await Proveedores.combosRepositorio.listarCombos(
+        incluirInactivos: true,
+      );
 
       final productos = await Proveedores.inventarioRepositorio.listarProductos(
         incluirInactivos: true,
@@ -53,7 +57,8 @@ class _ReporteMargenPantallaState extends State<ReporteMargenPantalla> {
       final List<_FilaMargen> filas = [];
 
       for (final c in combos) {
-        final componentes = await Proveedores.combosRepositorio.listarComponentes(c.id);
+        final componentes = await Proveedores.combosRepositorio
+            .listarComponentes(c.id);
 
         double costo = 0.0;
         bool faltanCostos = false;
@@ -71,7 +76,9 @@ class _ReporteMargenPantallaState extends State<ReporteMargenPantalla> {
 
         final double precio = c.precioVenta;
         final double ganancia = precio - costo;
-        final double porcentaje = (costo <= 0.0) ? 0.0 : (ganancia / costo) * 100.0;
+        final double porcentaje = (costo <= 0.0)
+            ? 0.0
+            : (ganancia / costo) * 100.0;
 
         filas.add(
           _FilaMargen(
@@ -134,20 +141,22 @@ class _ReporteMargenPantallaState extends State<ReporteMargenPantalla> {
       );
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('CSV guardado: $path')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('CSV guardado: $path')));
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No se pudo exportar')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('No se pudo exportar')));
     }
   }
 
   Widget _detalle(_FilaMargen f) {
     final theme = Theme.of(context);
-    final gananciaColor = f.ganancia < 0 ? theme.colorScheme.error : theme.colorScheme.primary;
+    final gananciaColor = f.ganancia < 0
+        ? theme.colorScheme.error
+        : theme.colorScheme.primary;
 
     return Card(
       child: Padding(
@@ -166,17 +175,17 @@ class _ReporteMargenPantallaState extends State<ReporteMargenPantalla> {
             const SizedBox(height: 6),
             Text('Costo: ${Formatos.dinero(_moneda, f.costo)}'),
             const SizedBox(height: 6),
-            Text(
-              'Ganancia: ${Formatos.dinero(_moneda, f.ganancia)}',
-              style: TextStyle(color: gananciaColor),
-            ),
+            Text('Ganancia:  • %', style: TextStyle(color: gananciaColor)),
             const SizedBox(height: 6),
             Text('${f.porcentaje.toStringAsFixed(1)}% sobre costo'),
             const SizedBox(height: 10),
             Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(999),
                     color: f.activo
@@ -192,7 +201,10 @@ class _ReporteMargenPantallaState extends State<ReporteMargenPantalla> {
                 if (f.faltanCostos)
                   Row(
                     children: [
-                      Icon(Icons.warning_amber_rounded, color: theme.colorScheme.error),
+                      Icon(
+                        Icons.warning_amber_rounded,
+                        color: theme.colorScheme.error,
+                      ),
                       const SizedBox(width: 6),
                       Text(
                         'Faltan costos',
@@ -227,28 +239,37 @@ class _ReporteMargenPantallaState extends State<ReporteMargenPantalla> {
 
         if (!esTablet) {
           return ListView.separated(
-            padding: const EdgeInsets.all(12),
+            padding: TabletMasterDetailLayout.kPagePadding,
             itemCount: _filas.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 8),
+            separatorBuilder: (context, index) => const SizedBox(height: 8),
             itemBuilder: (context, i) {
               final f = _filas[i];
 
               return Card(
                 child: ListTile(
-                  title: Text(f.nombre, maxLines: 1, overflow: TextOverflow.ellipsis),
+                  title: Text(
+                    f.nombre,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                   subtitle: Text(
                     'Precio: ${Formatos.dinero(_moneda, f.precio)}  •  '
-                        'Costo: ${Formatos.dinero(_moneda, f.costo)}\n'
-                        'Ganancia: ${Formatos.dinero(_moneda, f.ganancia)}  •  '
-                        '${f.porcentaje.toStringAsFixed(1)}% sobre costo',
+                    'Costo: ${Formatos.dinero(_moneda, f.costo)}\n'
+                    'Ganancia: ${Formatos.dinero(_moneda, f.ganancia)}  •  '
+                    '${f.porcentaje.toStringAsFixed(1)}% sobre costo',
                   ),
                   trailing: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Text(f.activo ? 'ACTIVO' : 'INACTIVO', style: Theme.of(context).textTheme.labelSmall),
+                      Text(
+                        f.activo ? 'ACTIVO' : 'INACTIVO',
+                        style: Theme.of(context).textTheme.labelSmall,
+                      ),
                       const SizedBox(height: 6),
                       Icon(
-                        f.faltanCostos ? Icons.warning_amber_rounded : Icons.check,
+                        f.faltanCostos
+                            ? Icons.warning_amber_rounded
+                            : Icons.check,
                         color: f.faltanCostos
                             ? Theme.of(context).colorScheme.error
                             : Theme.of(context).colorScheme.primary,
@@ -261,43 +282,48 @@ class _ReporteMargenPantallaState extends State<ReporteMargenPantalla> {
           );
         }
 
-        final sel = (_selIndex == null) ? 0 : (_selIndex!.clamp(0, _filas.length - 1));
+        final sel = (_selIndex == null)
+            ? 0
+            : (_selIndex!.clamp(0, _filas.length - 1));
         final fSel = _filas[sel];
 
-        return Row(
-          children: [
-            SizedBox(
-              width: 420,
-              child: ListView.separated(
-                padding: const EdgeInsets.all(12),
-                itemCount: _filas.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 8),
-                itemBuilder: (context, i) {
-                  final f = _filas[i];
-                  return Card(
-                    child: ListTile(
-                      selected: i == sel,
-                      title: Text(f.nombre, maxLines: 1, overflow: TextOverflow.ellipsis),
-                      subtitle: Text(
-                        'Ganancia: ${Formatos.dinero(_moneda, f.ganancia)} • ${f.porcentaje.toStringAsFixed(1)}%',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      trailing: Icon(
-                        f.faltanCostos ? Icons.warning_amber_rounded : Icons.check,
-                        color: f.faltanCostos
-                            ? Theme.of(context).colorScheme.error
-                            : Theme.of(context).colorScheme.primary,
-                      ),
-                      onTap: () => setState(() => _selIndex = i),
+        return Padding(
+          padding: TabletMasterDetailLayout.kPagePadding,
+          child: TabletMasterDetailLayout(
+            master: ListView.separated(
+              padding: EdgeInsets.zero,
+              itemCount: _filas.length,
+              separatorBuilder: (context, index) => const SizedBox(height: 8),
+              itemBuilder: (context, i) {
+                final f = _filas[i];
+                return Card(
+                  child: ListTile(
+                    selected: i == sel,
+                    title: Text(
+                      f.nombre,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                  );
-                },
-              ),
+                    subtitle: Text(
+                      'Ganancia: ${Formatos.dinero(_moneda, f.ganancia)} • ${f.porcentaje.toStringAsFixed(1)}%',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    trailing: Icon(
+                      f.faltanCostos
+                          ? Icons.warning_amber_rounded
+                          : Icons.check,
+                      color: f.faltanCostos
+                          ? Theme.of(context).colorScheme.error
+                          : Theme.of(context).colorScheme.primary,
+                    ),
+                    onTap: () => setState(() => _selIndex = i),
+                  ),
+                );
+              },
             ),
-            const SizedBox(width: 12),
-            Expanded(child: Padding(padding: const EdgeInsets.all(12), child: _detalle(fSel))),
-          ],
+            detail: _detalle(fSel),
+          ),
         );
       },
     );
@@ -309,7 +335,7 @@ class _ReporteMargenPantallaState extends State<ReporteMargenPantalla> {
       return Column(
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+            padding: TabletMasterDetailLayout.kPagePadding.copyWith(bottom: 0),
             child: Row(
               children: [
                 Expanded(
@@ -346,10 +372,7 @@ class _ReporteMargenPantallaState extends State<ReporteMargenPantalla> {
             icon: const Icon(Icons.download_outlined),
             tooltip: 'Exportar CSV',
           ),
-          IconButton(
-            onPressed: _cargar,
-            icon: const Icon(Icons.refresh),
-          ),
+          IconButton(onPressed: _cargar, icon: const Icon(Icons.refresh)),
         ],
       ),
       body: _contenido(context),

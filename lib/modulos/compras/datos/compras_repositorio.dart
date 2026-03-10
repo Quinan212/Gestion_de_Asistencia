@@ -12,12 +12,14 @@ class ComprasRepositorio {
 
   Future<int> crearCompra({
     String? proveedor,
+    double envioMonto = 0,
     double total = 0,
     String? nota,
     DateTime? fecha,
   }) {
     return _bd.crearCompra(
       proveedor: proveedor,
+      envioMonto: envioMonto,
       total: total,
       nota: nota,
       fecha: fecha,

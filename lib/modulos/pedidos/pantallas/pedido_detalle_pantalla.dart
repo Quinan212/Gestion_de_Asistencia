@@ -1,9 +1,9 @@
 // lib/modulos/pedidos/pantallas/pedido_detalle_pantalla.dart
 import 'package:flutter/material.dart';
-import 'package:gestion_de_stock/aplicacion/utiles/formatos.dart';
-import 'package:gestion_de_stock/infraestructura/dep_inyeccion/proveedores.dart';
-import 'package:gestion_de_stock/modulos/pedidos/modelos/linea_pedido.dart';
-import 'package:gestion_de_stock/modulos/pedidos/modelos/pedido.dart';
+import 'package:gestion_de_asistencias/aplicacion/utiles/formatos.dart';
+import 'package:gestion_de_asistencias/infraestructura/dep_inyeccion/proveedores.dart';
+import 'package:gestion_de_asistencias/modulos/pedidos/modelos/linea_pedido.dart';
+import 'package:gestion_de_asistencias/modulos/pedidos/modelos/pedido.dart';
 
 class PedidoDetallePantalla extends StatefulWidget {
   final int pedidoId;
@@ -74,7 +74,6 @@ class _PedidoDetallePantallaState extends State<PedidoDetallePantalla> {
       case PedidoEstado.cancelado:
         return cs.error;
       case PedidoEstado.borrador:
-      default:
         return cs.onSurfaceVariant;
     }
   }
@@ -98,16 +97,151 @@ class _PedidoDetallePantallaState extends State<PedidoDetallePantalla> {
     );
   }
 
+  Future<void> _mostrarUndoCambioEstado({
+    required int pedidoId,
+    required PedidoEstado estadoAnterior,
+    required PedidoEstado estadoNuevo,
+  }) async {
+    if (estadoAnterior == estadoNuevo ||
+        estadoNuevo == PedidoEstado.entregado) {
+      return;
+    }
+
+    final messenger = ScaffoldMessenger.of(context);
+    bool deshacer = false;
+
+    messenger.hideCurrentSnackBar();
+    await messenger
+        .showSnackBar(
+          SnackBar(
+            content: Text('Estado actualizado a ${estadoNuevo.label}'),
+            action: SnackBarAction(
+              label: 'Deshacer',
+              onPressed: () => deshacer = true,
+            ),
+            duration: const Duration(seconds: 6),
+          ),
+        )
+        .closed;
+
+    if (!mounted || !deshacer) return;
+
+    try {
+      await Proveedores.pedidosRepositorio.cambiarEstado(
+        pedidoId: pedidoId,
+        estado: estadoAnterior,
+        recalcularReservasSiEncargado: estadoAnterior == PedidoEstado.encargado,
+      );
+
+      if (!mounted) return;
+      Proveedores.notificarDatosActualizados();
+      widget.alCambiarAlgo?.call();
+      setState(_refrescar);
+      messenger.showSnackBar(
+        SnackBar(content: Text('Estado restaurado a ${estadoAnterior.label}')),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('No se pudo deshacer el cambio de estado'),
+        ),
+      );
+    }
+  }
+
+  Future<bool> _mostrarUndoCancelacionPedido({
+    required Pedido pedidoAntesDeCancelar,
+  }) async {
+    final messenger = ScaffoldMessenger.of(context);
+    bool deshacer = false;
+
+    messenger.hideCurrentSnackBar();
+    await messenger
+        .showSnackBar(
+          SnackBar(
+            content: const Text('Pedido cancelado'),
+            action: SnackBarAction(
+              label: 'Deshacer',
+              onPressed: () => deshacer = true,
+            ),
+            duration: const Duration(seconds: 6),
+          ),
+        )
+        .closed;
+
+    if (!mounted || !deshacer) return false;
+
+    try {
+      await Proveedores.pedidosRepositorio.cambiarEstado(
+        pedidoId: pedidoAntesDeCancelar.id,
+        estado: pedidoAntesDeCancelar.estado,
+        recalcularReservasSiEncargado:
+            pedidoAntesDeCancelar.estado == PedidoEstado.encargado,
+      );
+
+      if (!mounted) return false;
+      Proveedores.notificarDatosActualizados();
+      widget.alCambiarAlgo?.call();
+      setState(_refrescar);
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            'Cancelacion deshecha (${pedidoAntesDeCancelar.estado.label})',
+          ),
+        ),
+      );
+      return true;
+    } catch (_) {
+      if (!mounted) return false;
+      messenger.showSnackBar(
+        const SnackBar(content: Text('No se pudo deshacer la cancelacion')),
+      );
+      return false;
+    }
+  }
+
   Future<void> _cambiarEstado(Pedido p, PedidoEstado nuevo) async {
     if (p.estado == nuevo) return;
-
-    // solo bloqueamos si está cancelado
     if (p.estado == PedidoEstado.cancelado) return;
+    if (p.estado == PedidoEstado.entregado && nuevo != PedidoEstado.entregado) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'El pedido ya fue entregado y no puede volver a estados anteriores.',
+          ),
+        ),
+      );
+      return;
+    }
 
-    // si el usuario marca "Entregado" desde acá y todavía no hay venta, usamos la lógica de entregar
     if (nuevo == PedidoEstado.entregado && p.ventaId == null) {
       await _entregar(p);
       return;
+    }
+
+    if (nuevo == PedidoEstado.preparado && !p.stockDescontado) {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text('Marcar preparado'),
+          content: const Text(
+            'Se descontara stock ahora. Al entregar solo se generara la venta definitiva.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('No'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Preparar'),
+            ),
+          ],
+        ),
+      );
+      if (ok != true) return;
     }
 
     await Proveedores.pedidosRepositorio.cambiarEstado(
@@ -117,8 +251,14 @@ class _PedidoDetallePantallaState extends State<PedidoDetallePantalla> {
     );
 
     if (!mounted) return;
+    Proveedores.notificarDatosActualizados();
     widget.alCambiarAlgo?.call();
     setState(_refrescar);
+    _mostrarUndoCambioEstado(
+      pedidoId: p.id,
+      estadoAnterior: p.estado,
+      estadoNuevo: nuevo,
+    );
   }
 
   Future<void> _cancelarPedido(Pedido p) async {
@@ -136,7 +276,7 @@ class _PedidoDetallePantallaState extends State<PedidoDetallePantalla> {
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Sí, cancelar'),
+            child: const Text('Si, cancelar'),
           ),
         ],
       ),
@@ -146,12 +286,33 @@ class _PedidoDetallePantallaState extends State<PedidoDetallePantalla> {
     await Proveedores.pedidosRepositorio.cancelarPedido(pedidoId: p.id);
 
     if (!mounted) return;
+    Proveedores.notificarDatosActualizados();
     widget.alCambiarAlgo?.call();
+    setState(_refrescar);
 
+    final puedeDeshacer =
+        p.ventaId == null && p.estado != PedidoEstado.entregado;
+
+    if (puedeDeshacer) {
+      final deshecho = await _mostrarUndoCancelacionPedido(
+        pedidoAntesDeCancelar: p,
+      );
+      if (!mounted) return;
+      if (!widget.embebido && !deshecho) {
+        Navigator.pop(context);
+      }
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Pedido cancelado. Este cambio no se puede deshacer en este caso.',
+        ),
+      ),
+    );
     if (!widget.embebido) {
       Navigator.pop(context);
-    } else {
-      setState(_refrescar);
     }
   }
 
@@ -159,11 +320,24 @@ class _PedidoDetallePantallaState extends State<PedidoDetallePantalla> {
     if (p.estado == PedidoEstado.cancelado) return;
     if (p.estado == PedidoEstado.entregado) return;
 
+    if (!p.stockDescontado) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Primero marca el pedido como preparado para descontar stock.',
+          ),
+        ),
+      );
+      return;
+    }
+
     final ok = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
         title: const Text('Marcar entregado'),
-        content: const Text('Crea la venta y registra movimientos de stock.'),
+        content: const Text(
+          'Genera la venta definitiva. El stock ya se desconto al preparar el pedido.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -178,9 +352,12 @@ class _PedidoDetallePantallaState extends State<PedidoDetallePantalla> {
     );
     if (ok != true) return;
 
-    await Proveedores.pedidosRepositorio.marcarEntregadoYCrearVenta(pedidoId: p.id);
+    await Proveedores.pedidosRepositorio.marcarEntregadoYCrearVenta(
+      pedidoId: p.id,
+    );
 
     if (!mounted) return;
+    Proveedores.notificarDatosActualizados();
     widget.alCambiarAlgo?.call();
     setState(_refrescar);
   }
@@ -197,6 +374,7 @@ class _PedidoDetallePantallaState extends State<PedidoDetallePantalla> {
     );
 
     if (!mounted) return;
+    Proveedores.notificarDatosActualizados();
     widget.alCambiarAlgo?.call();
     setState(_refrescar);
   }
@@ -251,6 +429,71 @@ class _PedidoDetallePantallaState extends State<PedidoDetallePantalla> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _botonEstado({
+    required String tooltip,
+    required String texto,
+    required VoidCallback? onPressed,
+  }) {
+    return Tooltip(
+      message: tooltip,
+      child: SizedBox(
+        width: double.infinity,
+        height: 44,
+        child: OutlinedButton(onPressed: onPressed, child: Text(texto)),
+      ),
+    );
+  }
+
+  Widget _grillaEstados(Pedido p) {
+    final est = p.estado;
+    final bloqueadoPorEntregado = est == PedidoEstado.entregado;
+
+    return LayoutBuilder(
+      builder: (context, c) {
+        final columnas = c.maxWidth < 360 ? 1 : 2;
+
+        return GridView.count(
+          crossAxisCount: columnas,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          crossAxisSpacing: 8,
+          mainAxisSpacing: 8,
+          childAspectRatio: columnas == 1 ? 5.8 : 3.2,
+          children: [
+            _botonEstado(
+              tooltip: 'Cambiar a borrador',
+              texto: 'Borrador',
+              onPressed: (est == PedidoEstado.borrador || bloqueadoPorEntregado)
+                  ? null
+                  : () => _cambiarEstado(p, PedidoEstado.borrador),
+            ),
+            _botonEstado(
+              tooltip: 'Cambiar a encargado',
+              texto: 'Encargado',
+              onPressed: bloqueadoPorEntregado
+                  ? null
+                  : () => _cambiarEstado(p, PedidoEstado.encargado),
+            ),
+            _botonEstado(
+              tooltip: 'Cambiar a preparado',
+              texto: 'Preparado',
+              onPressed: bloqueadoPorEntregado
+                  ? null
+                  : () => _cambiarEstado(p, PedidoEstado.preparado),
+            ),
+            _botonEstado(
+              tooltip: 'Cambiar a entregado',
+              texto: 'Entregado',
+              onPressed: est == PedidoEstado.entregado
+                  ? null
+                  : () => _cambiarEstado(p, PedidoEstado.entregado),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -310,145 +553,172 @@ class _PedidoDetallePantallaState extends State<PedidoDetallePantalla> {
                     alignment: WrapAlignment.spaceBetween,
                     children: [
                       if (!widget.embebido) _chipEstado(est),
-                      if (est != PedidoEstado.cancelado && est != PedidoEstado.entregado)
-                        FilledButton.tonal(
-                          onPressed: () => _entregar(p),
-                          child: const Text('Entregar'),
+                      if (est != PedidoEstado.cancelado &&
+                          est != PedidoEstado.entregado)
+                        Tooltip(
+                          message: 'Marcar como entregado',
+                          child: FilledButton.tonal(
+                            onPressed: () => _entregar(p),
+                            style: FilledButton.styleFrom(
+                              minimumSize: const Size(120, 44),
+                            ),
+                            child: const Text('Entregar'),
+                          ),
                         ),
                       if (est != PedidoEstado.cancelado)
-                        OutlinedButton(
-                          onPressed: () => _cancelarPedido(p),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: Theme.of(context).colorScheme.error,
+                        Tooltip(
+                          message: 'Cancelar pedido',
+                          child: OutlinedButton(
+                            onPressed: () => _cancelarPedido(p),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Theme.of(
+                                context,
+                              ).colorScheme.error,
+                              minimumSize: const Size(120, 44),
+                            ),
+                            child: const Text('Cancelar'),
                           ),
-                          child: const Text('Cancelar'),
                         ),
                     ],
                   ),
 
                   const SizedBox(height: 12),
 
-                  _bloque(
-                    'Estado',
-                    [
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          OutlinedButton(
-                            onPressed: (est == PedidoEstado.borrador)
-                                ? null
-                                : () => _cambiarEstado(p, PedidoEstado.borrador),
-                            child: const Text('Borrador'),
-                          ),
-                          OutlinedButton(
-                            onPressed: () => _cambiarEstado(p, PedidoEstado.encargado),
-                            child: const Text('Encargado'),
-                          ),
-                          OutlinedButton(
-                            onPressed: () => _cambiarEstado(p, PedidoEstado.preparado),
-                            child: const Text('Preparado'),
-                          ),
-
-                          // si ya está entregado, igual permitimos "reabrir" a preparado/encargado/borrador arriba.
-                          // este botón deja marcar entregado manual (si no hay venta va por _entregar)
-                          OutlinedButton(
-                            onPressed: () => _cambiarEstado(p, PedidoEstado.entregado),
-                            child: const Text('Entregado'),
-                          ),
-                        ],
+                  _bloque('Estado', [
+                    _grillaEstados(p),
+                    const SizedBox(height: 10),
+                    Text(
+                      est == PedidoEstado.entregado
+                          ? (p.ventaId == null
+                                ? 'Entregado (bloqueado para cambios de estado)'
+                                : 'Entregado (se genero venta y se bloquearon cambios)')
+                          : est == PedidoEstado.cancelado
+                          ? 'Cancelado'
+                          : 'Podes cambiar el estado.',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: cs.onSurfaceVariant,
                       ),
-                      const SizedBox(height: 10),
+                    ),
+                    if (p.ventaId != null) ...[
+                      const SizedBox(height: 8),
                       Text(
-                        est == PedidoEstado.entregado
-                            ? (p.ventaId == null
-                            ? 'Entregado'
-                            : 'Entregado (se generó venta)')
-                            : est == PedidoEstado.cancelado
-                            ? 'Cancelado'
-                            : 'Podés cambiar el estado.',
-                        style: Theme.of(context)
-                            .textTheme
-                            .bodyMedium
-                            ?.copyWith(color: cs.onSurfaceVariant),
+                        'Venta vinculada: #${p.ventaId}',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: cs.onSurfaceVariant,
+                        ),
                       ),
-                      if (p.ventaId != null) ...[
-                        const SizedBox(height: 8),
-                        Text(
-                          'Venta vinculada: #${p.ventaId}',
-                          style: Theme.of(context)
-                              .textTheme
-                              .bodyMedium
-                              ?.copyWith(color: cs.onSurfaceVariant),
+                    ],
+                  ]),
+
+                  const SizedBox(height: 12),
+
+                  _bloque('Totales', [
+                    // subtotal es lo importante
+                    _fila(
+                      'Subtotal',
+                      Formatos.dinero(_moneda, p.subtotal),
+                      strong: true,
+                    ),
+                    _fila(
+                      'Envio',
+                      p.envioMonto > 0
+                          ? Formatos.dinero(_moneda, p.envioMonto)
+                          : '-',
+                    ),
+                    _fila(
+                      'Total (con envio)',
+                      Formatos.dinero(_moneda, p.total),
+                    ),
+                    const SizedBox(height: 10),
+
+                    DropdownButtonFormField<String>(
+                      initialValue: (p.medioPago).trim().isEmpty
+                          ? 'Efectivo'
+                          : p.medioPago,
+                      items: const [
+                        DropdownMenuItem(
+                          value: 'Efectivo',
+                          child: Text('Efectivo'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'Tarjeta',
+                          child: Text('Tarjeta'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'Transferencia',
+                          child: Text('Transferencia'),
                         ),
                       ],
-                    ],
-                  ),
-
-                  const SizedBox(height: 12),
-
-                  _bloque(
-                    'Totales',
-                    [
-                      // subtotal es lo importante
-                      _fila('Subtotal', Formatos.dinero(_moneda, p.subtotal), strong: true),
-                      _fila('Envío', p.envioMonto > 0 ? Formatos.dinero(_moneda, p.envioMonto) : '-'),
-                      _fila('Total (con envío)', Formatos.dinero(_moneda, p.total)),
-                      const SizedBox(height: 10),
-
-                      DropdownButtonFormField<String>(
-                        value: (p.medioPago).trim().isEmpty ? 'Efectivo' : p.medioPago,
-                        items: const [
-                          DropdownMenuItem(value: 'Efectivo', child: Text('Efectivo')),
-                          DropdownMenuItem(value: 'Tarjeta', child: Text('Tarjeta')),
-                          DropdownMenuItem(value: 'Transferencia', child: Text('Transferencia')),
-                        ],
-                        onChanged: puedeEditarPago
-                            ? (v) async {
-                          if (v == null) return;
-                          await _actualizarPago(pedidoId: p.id, medioPago: v);
-                        }
-                            : null,
-                        decoration: const InputDecoration(labelText: 'Medio de pago'),
+                      onChanged: puedeEditarPago
+                          ? (v) async {
+                              if (v == null) return;
+                              await _actualizarPago(
+                                pedidoId: p.id,
+                                medioPago: v,
+                              );
+                            }
+                          : null,
+                      decoration: const InputDecoration(
+                        labelText: 'Medio de pago',
                       ),
+                    ),
 
-                      const SizedBox(height: 12),
+                    const SizedBox(height: 12),
 
-                      DropdownButtonFormField<String>(
-                        value: (p.estadoPago).trim().isEmpty ? 'pendiente' : p.estadoPago,
-                        items: const [
-                          DropdownMenuItem(value: 'pendiente', child: Text('Pendiente')),
-                          DropdownMenuItem(value: 'pagado', child: Text('Pagado')),
-                          DropdownMenuItem(value: 'parcial', child: Text('Parcial')),
-                        ],
-                        onChanged: puedeEditarPago
-                            ? (v) async {
-                          if (v == null) return;
-                          await _actualizarPago(pedidoId: p.id, estadoPago: v);
-                        }
-                            : null,
-                        decoration: const InputDecoration(labelText: 'Estado de pago'),
+                    DropdownButtonFormField<String>(
+                      initialValue: (p.estadoPago).trim().isEmpty
+                          ? 'pendiente'
+                          : p.estadoPago,
+                      items: const [
+                        DropdownMenuItem(
+                          value: 'pendiente',
+                          child: Text('Pendiente'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'pagado',
+                          child: Text('Pagado'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'parcial',
+                          child: Text('Parcial'),
+                        ),
+                      ],
+                      onChanged: puedeEditarPago
+                          ? (v) async {
+                              if (v == null) return;
+                              await _actualizarPago(
+                                pedidoId: p.id,
+                                estadoPago: v,
+                              );
+                            }
+                          : null,
+                      decoration: const InputDecoration(
+                        labelText: 'Estado de pago',
                       ),
-                    ],
-                  ),
+                    ),
+                  ]),
 
                   const SizedBox(height: 12),
 
-                  _bloque(
-                    'Nota',
-                    [
-                      Text((p.nota ?? '').trim().isEmpty ? '-' : (p.nota ?? '').trim()),
-                    ],
-                  ),
+                  _bloque('Nota', [
+                    Text(
+                      (p.nota ?? '').trim().isEmpty
+                          ? '-'
+                          : (p.nota ?? '').trim(),
+                    ),
+                  ]),
 
                   const SizedBox(height: 12),
-                  Text('Descripción de la venta', style: Theme.of(context).textTheme.titleMedium),
+                  Text(
+                    'Descripcion de la venta',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
                   const SizedBox(height: 8),
 
                   if (lineas.isEmpty)
                     const Padding(
                       padding: EdgeInsets.only(top: 20),
-                      child: Center(child: Text('Sin líneas')),
+                      child: Center(child: Text('Sin lineas')),
                     )
                   else
                     for (final l in lineas)
@@ -457,17 +727,19 @@ class _PedidoDetallePantallaState extends State<PedidoDetallePantalla> {
                         child: Card(
                           clipBehavior: Clip.antiAlias,
                           child: ListTile(
-                            title: Text(l.nombre, maxLines: 1, overflow: TextOverflow.ellipsis),
+                            title: Text(
+                              l.nombre,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                             subtitle: Text(
-                              'Cant: ${l.cantidad.toStringAsFixed(2)} ${l.unidad}  •  PU: ${Formatos.dinero(_moneda, l.precioUnitario)}',
+                              'Cant: ${Formatos.cantidad(l.cantidad, unidad: l.unidad)} ${l.unidad}  -  PU: ${Formatos.dinero(_moneda, l.precioUnitario)}',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
                             trailing: Text(
                               Formatos.dinero(_moneda, l.subtotal),
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .titleMedium
+                              style: Theme.of(context).textTheme.titleMedium
                                   ?.copyWith(fontWeight: FontWeight.w800),
                             ),
                           ),
@@ -477,7 +749,9 @@ class _PedidoDetallePantallaState extends State<PedidoDetallePantalla> {
               ),
             );
 
-            if (widget.embebido) return Material(color: Colors.transparent, child: list);
+            if (widget.embebido) {
+              return Material(color: Colors.transparent, child: list);
+            }
             return list;
           },
         );

@@ -3,10 +3,17 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:gestion_de_stock/infraestructura/dep_inyeccion/proveedores.dart';
-import 'package:gestion_de_stock/modulos/ventas/modelos/venta.dart';
-import 'package:gestion_de_stock/modulos/ventas/pantallas/venta_nueva_pantalla.dart';
-import 'package:gestion_de_stock/modulos/ventas/pantallas/venta_detalle_pantalla.dart';
+import 'package:gestion_de_asistencias/aplicacion/utiles/filtros_persistidos.dart';
+import 'package:gestion_de_asistencias/aplicacion/utiles/layout_app.dart';
+import 'package:gestion_de_asistencias/aplicacion/utiles/texto_normalizado.dart';
+import 'package:gestion_de_asistencias/aplicacion/widgets/estado_lista.dart';
+import 'package:gestion_de_asistencias/aplicacion/widgets/fila_lista_modulo.dart';
+import 'package:gestion_de_asistencias/aplicacion/widgets/panel_controles_modulo.dart';
+import 'package:gestion_de_asistencias/aplicacion/widgets/tablet_master_detail_layout.dart';
+import 'package:gestion_de_asistencias/infraestructura/dep_inyeccion/proveedores.dart';
+import 'package:gestion_de_asistencias/modulos/ventas/modelos/venta.dart';
+import 'package:gestion_de_asistencias/modulos/ventas/pantallas/venta_detalle_pantalla.dart';
+import 'package:gestion_de_asistencias/modulos/ventas/pantallas/venta_nueva_pantalla.dart';
 
 class VentasPantalla extends StatefulWidget {
   const VentasPantalla({super.key});
@@ -16,31 +23,64 @@ class VentasPantalla extends StatefulWidget {
 }
 
 class _VentasPantallaState extends State<VentasPantalla> {
-  static const double _kTablet = 900;
+  static const double _kTablet = LayoutApp.kTablet;
   static const bool _mostrarBotonNuevaVenta = false;
+  static const String _kBusquedaKey = 'ventas_busqueda_v1';
+
   String _moneda = r'$';
   int? _seleccionadaId;
-  int _refreshTick = 0;
 
   final _buscarCtrl = TextEditingController();
   String _q = '';
 
-  // cache: evita saltos/parpadeos por FutureBuilder por fila
-  final Map<int, Future<_VentaItemInfo>> _infoCache = {};
+  // cache: evita recalculos y saltos visuales de total->subtotal
+  final Map<int, _VentaItemInfo> _infoCache = {};
+  late Future<List<Venta>> _datosFuture;
+  late final VoidCallback _datosVersionListener;
+  bool _hidratandoInfo = false;
+  int _hidratacionToken = 0;
+  final Set<int> _idsHidratando = <int>{};
 
   @override
   void initState() {
     super.initState();
     _cargarMoneda();
+    _restaurarBusqueda();
+    _datosFuture = _cargar();
+    _datosVersionListener = _onDatosVersionChanged;
+    Proveedores.datosVersion.addListener(_datosVersionListener);
     _buscarCtrl.addListener(() {
       final t = _buscarCtrl.text.trim();
       if (t == _q) return;
       setState(() => _q = t);
+      _guardarBusqueda(t);
+    });
+  }
+
+  Future<void> _restaurarBusqueda() async {
+    final q = await FiltrosPersistidos.leerTexto(_kBusquedaKey);
+    if (!mounted) return;
+    _buscarCtrl.text = q;
+    setState(() => _q = q.trim());
+  }
+
+  void _guardarBusqueda(String texto) {
+    FiltrosPersistidos.guardarTexto(_kBusquedaKey, texto);
+  }
+
+  void _onDatosVersionChanged() {
+    if (!mounted) return;
+    setState(() {
+      _cancelarHidratacion();
+      _infoCache.clear();
+      _datosFuture = _cargar();
     });
   }
 
   @override
   void dispose() {
+    _cancelarHidratacion();
+    Proveedores.datosVersion.removeListener(_datosVersionListener);
     _buscarCtrl.dispose();
     super.dispose();
   }
@@ -51,7 +91,15 @@ class _VentasPantallaState extends State<VentasPantalla> {
     setState(() => _moneda = prefs.getString('config_moneda') ?? r'$');
   }
 
-  Future<List<Venta>> _cargar() => Proveedores.ventasRepositorio.listarVentas();
+  Future<List<Venta>> _cargar() async {
+    try {
+      return await Proveedores.ventasRepositorio.listarVentas();
+    } catch (e, st) {
+      debugPrint('VentasPantalla._cargar error: ${e.toString()}');
+      debugPrintStack(stackTrace: st);
+      rethrow;
+    }
+  }
 
   Future<void> _nuevaVenta() async {
     await Navigator.push(
@@ -60,14 +108,13 @@ class _VentasPantallaState extends State<VentasPantalla> {
     );
     if (!mounted) return;
     setState(() {
-      _refreshTick++;
-      _infoCache.clear(); // refrescar títulos/miniaturas
+      _cancelarHidratacion();
+      _infoCache.clear();
+      _datosFuture = _cargar();
     });
   }
 
   bool _esAncha(BoxConstraints c) => c.maxWidth >= _kTablet;
-
-  // -------------------- helpers fecha --------------------
 
   static const _mesesLargos = [
     'enero',
@@ -89,6 +136,76 @@ class _VentasPantallaState extends State<VentasPantalla> {
     return '${d2(f.hour)}:${d2(f.minute)} hs';
   }
 
+  void _cancelarHidratacion() {
+    _hidratacionToken++;
+    _hidratandoInfo = false;
+    _idsHidratando.clear();
+  }
+
+  _VentaItemInfo _infoFallback(Venta v) {
+    return _VentaItemInfo(
+      titulo: 'Venta',
+      imagenRuta: null,
+      subtotal: v.total,
+      notaPedidoFallback: null,
+    );
+  }
+
+  void _programarHidratacionInfo(List<Venta> ventas) {
+    if (_hidratandoInfo) return;
+
+    final pendientes = ventas.where((v) {
+      final enCache = _infoCache[v.id];
+      if (enCache == null) {
+        return !_idsHidratando.contains(v.id);
+      }
+      final notaEnVenta = _notaPedidoDesdeNota(v.nota).trim();
+      final notaEnCache = (enCache.notaPedidoFallback ?? '').trim();
+      final cacheIncompleto = notaEnVenta.isEmpty && notaEnCache.isEmpty;
+      return cacheIncompleto && !_idsHidratando.contains(v.id);
+    }).toList();
+    if (pendientes.isEmpty) return;
+
+    _hidratandoInfo = true;
+    final token = ++_hidratacionToken;
+
+    Future<void>(() async {
+      const tamanioLote = 6;
+
+      for (int i = 0; i < pendientes.length; i += tamanioLote) {
+        if (!mounted || token != _hidratacionToken) break;
+
+        final lote = pendientes.skip(i).take(tamanioLote).toList();
+        for (final v in lote) {
+          _idsHidratando.add(v.id);
+        }
+
+        final resultados = await Future.wait(
+          lote.map((v) async {
+            try {
+              return MapEntry(v.id, await _infoVenta(v));
+            } catch (_) {
+              return MapEntry(v.id, _infoFallback(v));
+            }
+          }),
+        );
+
+        if (!mounted || token != _hidratacionToken) break;
+
+        for (final r in resultados) {
+          _idsHidratando.remove(r.key);
+          _infoCache[r.key] = r.value;
+        }
+
+        if (mounted) setState(() {});
+      }
+
+      if (token == _hidratacionToken) {
+        _hidratandoInfo = false;
+      }
+    });
+  }
+
   bool _mismoDia(DateTime a, DateTime b) =>
       a.year == b.year && a.month == b.month && a.day == b.day;
 
@@ -101,90 +218,155 @@ class _VentasPantallaState extends State<VentasPantalla> {
     if (diff == 0) return 'Hoy';
     if (diff == 1) return 'Ayer';
 
-    final mes = (f.month >= 1 && f.month <= 12) ? _mesesLargos[f.month - 1] : '';
+    final mes = (f.month >= 1 && f.month <= 12)
+        ? _mesesLargos[f.month - 1]
+        : '';
     return '${f.day} de $mes';
   }
 
-  // -------------------- helpers nota: cliente/envio --------------------
-
-  String _extraerCampoNota(String? nota, List<String> etiquetas) {
-    final t = (nota ?? '').trim();
-    if (t.isEmpty) return '';
-    for (final et in etiquetas) {
-      final re = RegExp('${RegExp.escape(et)}\\s*([^•\\n]+)', caseSensitive: false);
-      final m = re.firstMatch(t);
-      final v = (m?.group(1) ?? '').trim();
-      if (v.isNotEmpty) return v;
-    }
-    return '';
+  String _textoNota(String? nota) {
+    return TextoNormalizado.normalizarNota(nota);
   }
 
-  String _clienteDesdeNota(String? nota) =>
-      _extraerCampoNota(nota, const ['Cliente:', 'cliente:']);
+  String _limpiarValorCampo(String valor) {
+    var out = valor.trim();
 
-  String _envioDesdeNota(String? nota) => _extraerCampoNota(
-    nota,
-    const ['Envío:', 'Envio:', 'Cargo por envío:', 'Cargo envio:'],
-  );
-
-  double _parseMonto(String t) {
-    var s = t.trim();
-    if (s.isEmpty) return 0.0;
-
-    s = s.replaceAll(_moneda, '').replaceAll(' ', '');
-    s = s.replaceAll(RegExp(r'[^0-9\.,\-]'), '');
-
-    if (s.isEmpty) return 0.0;
-
-    final hasDot = s.contains('.');
-    final hasComma = s.contains(',');
-
-    if (hasDot && hasComma) {
-      s = s.replaceAll('.', '').replaceAll(',', '.');
-    } else if (hasComma && !hasDot) {
-      s = s.replaceAll(',', '.');
+    for (final sep in const ['|', ';', '\u2022', '\u00B7']) {
+      final idx = out.indexOf(sep);
+      if (idx >= 0) out = out.substring(0, idx).trim();
     }
 
-    return double.tryParse(s) ?? 0.0;
+    final lower = out.toLowerCase();
+    for (final marker in const [
+      'nota:',
+      'pago:',
+      'medio de pago:',
+      'estado pago:',
+      'envio:',
+      'envo:',
+      'cargo por envio',
+      'cargo por envo',
+      'cargo envio',
+      'cargo envo',
+      'costo estimado',
+      'margen estimado',
+      'reintegro:',
+    ]) {
+      final idx = lower.indexOf(marker);
+      if (idx > 0) {
+        out = out.substring(0, idx).trim();
+        break;
+      }
+    }
+
+    return out;
   }
 
-  // -------------------- info por item (solo titulo + imagen) --------------------
+  String _normalizarNombreCliente(String valor) {
+    return TextoNormalizado.limpiarTextoSimple(valor);
+  }
+
+  String _clienteDesdeNota(String? nota) {
+    final t = _textoNota(nota);
+    final m = RegExp(
+      r'cliente\s*:?\s*(.+?)(?=(?:\n|\||;|nota\s*:|pago\s*:|medio\s*de\s*pago\s*:|estado\s*pago\s*:|cargo\s*por\s*(?:envio|envo)|cargo\s*(?:envio|envo)|(?:envio|envo)\s*:|costo\s*estimado|margen\s*estimado|reintegro\s*:|$))',
+      caseSensitive: false,
+    ).firstMatch(t);
+    final v = (m?.group(1) ?? '').trim();
+    return _normalizarNombreCliente(_limpiarValorCampo(v));
+  }
+
+  String _notaPedidoDesdeNota(String? nota) {
+    final t = _textoNota(nota);
+    final m = RegExp(
+      r'nota\s*:?\s*(.+?)(?=(?:\n|\||;|pago\s*:|medio\s*de\s*pago\s*:|estado\s*pago\s*:|cargo\s*por\s*(?:envio|envo)|cargo\s*(?:envio|envo)|(?:envio|envo)\s*:|costo\s*estimado|margen\s*estimado|reintegro\s*:|$))',
+      caseSensitive: false,
+    ).firstMatch(t);
+    final v = (m?.group(1) ?? '').trim();
+    return _normalizarNombreCliente(_limpiarValorCampo(v));
+  }
+
+  int? _pedidoIdDesdeNotaVenta(String? nota) {
+    final t = _textoNota(nota);
+    final m = RegExp(
+      r'pedido\s*#?\s*:?\s*(\d+)',
+      caseSensitive: false,
+    ).firstMatch(t);
+    final raw = m?.group(1);
+    if (raw == null) return null;
+    return int.tryParse(raw);
+  }
 
   Future<_VentaItemInfo> _infoVenta(Venta v) async {
     String titulo = 'Venta';
     String? imagen;
+    double subtotal = 0.0;
+    String? notaPedidoFallback;
 
     try {
       final lineas = await Proveedores.ventasRepositorio.listarLineas(v.id);
+      for (final l in lineas) {
+        subtotal += l.subtotal;
+      }
       if (lineas.isNotEmpty) {
         final primera = lineas.first;
-        final combo = await Proveedores.combosRepositorio.obtenerCombo(primera.comboId);
+        final combo = await Proveedores.combosRepositorio.obtenerCombo(
+          primera.comboId,
+        );
         if (combo != null) {
           final n = combo.nombre.trim();
           titulo = n.isEmpty ? 'Venta' : n;
 
-          final comps = await Proveedores.combosRepositorio.listarComponentes(combo.id);
+          final comps = await Proveedores.combosRepositorio.listarComponentes(
+            combo.id,
+          );
           if (comps.isNotEmpty) {
-            final prod = await Proveedores.inventarioRepositorio.obtenerProducto(
-              comps.first.productoId,
-            );
+            final prod = await Proveedores.inventarioRepositorio
+                .obtenerProducto(comps.first.productoId);
             final ruta = (prod?.imagen ?? '').trim();
             if (ruta.isNotEmpty && File(ruta).existsSync()) {
               imagen = ruta;
             }
           }
+        } else if (primera.productoId != null) {
+          final prod = await Proveedores.inventarioRepositorio.obtenerProducto(
+            primera.productoId!,
+          );
+          final n = (prod?.nombreConVariante ?? '').trim();
+          if (n.isNotEmpty) titulo = n;
+
+          final ruta = (prod?.imagen ?? '').trim();
+          if (ruta.isNotEmpty && File(ruta).existsSync()) {
+            imagen = ruta;
+          }
         }
       }
-    } catch (_) {}
 
-    return _VentaItemInfo(titulo: titulo, imagenRuta: imagen);
+      if (_notaPedidoDesdeNota(v.nota).trim().isEmpty) {
+        final pedido = await Proveedores.pedidosRepositorio
+            .obtenerPedidoPorVentaId(v.id);
+        var notaPedido = (pedido?.nota ?? '').trim();
+        if (notaPedido.isEmpty) {
+          final pedidoId = _pedidoIdDesdeNotaVenta(v.nota);
+          if (pedidoId != null) {
+            final pedidoPorId = await Proveedores.pedidosRepositorio
+                .obtenerPedido(pedidoId);
+            notaPedido = (pedidoPorId?.nota ?? '').trim();
+          }
+        }
+        if (notaPedido.isNotEmpty) notaPedidoFallback = notaPedido;
+      }
+    } catch (_) {
+      subtotal = v.total;
+    }
+
+    return _VentaItemInfo(
+      titulo: titulo,
+      imagenRuta: imagen,
+      subtotal: subtotal,
+      notaPedidoFallback: notaPedidoFallback,
+    );
   }
-
-  Future<_VentaItemInfo> _infoVentaCached(Venta v) {
-    return _infoCache.putIfAbsent(v.id, () => _infoVenta(v));
-  }
-
-  // -------------------- UI --------------------
 
   Widget _botonNuevaVenta() {
     return SizedBox(
@@ -207,13 +389,13 @@ class _VentasPantallaState extends State<VentasPantalla> {
         suffixIcon: _q.isEmpty
             ? null
             : IconButton(
-          onPressed: () {
-            _buscarCtrl.clear();
-            FocusScope.of(context).unfocus();
-          },
-          icon: const Icon(Icons.close),
-          tooltip: 'Limpiar',
-        ),
+                onPressed: () {
+                  _buscarCtrl.clear();
+                  FocusScope.of(context).unfocus();
+                },
+                icon: const Icon(Icons.close),
+                tooltip: 'Limpiar',
+              ),
       ),
     );
   }
@@ -240,112 +422,88 @@ class _VentasPantallaState extends State<VentasPantalla> {
     );
   }
 
-  double _totalSoloProductos(Venta v) {
-    final envioTxt = _envioDesdeNota(v.nota);
-    final envio = _parseMonto(envioTxt);
-
-    final total = v.total;
-    final x = total - envio;
-
-    if (!x.isFinite) return total;
-    if (x < 0) return 0.0;
-    return x;
-  }
-
   Widget _filaVenta({
     required bool ancha,
     required Venta v,
+    required _VentaItemInfo info,
     required bool seleccionada,
   }) {
     final cancelada = (v.nota ?? '').contains('VENTA CANCELADA');
     final cliente = _clienteDesdeNota(v.nota);
-
-    // monto fijo (sin Future) => sin salto
-    final totalProductos = _totalSoloProductos(v);
+    final notaExtraida = _notaPedidoDesdeNota(v.nota);
+    final notaFallback = _normalizarNombreCliente(
+      _limpiarValorCampo((info.notaPedidoFallback ?? '').trim()),
+    );
+    final notaPedido = notaExtraida.trim().isNotEmpty
+        ? notaExtraida
+        : notaFallback;
+    final clienteYNota = () {
+      final c = cliente.trim();
+      final n = notaPedido.trim();
+      if (c.isNotEmpty && n.isNotEmpty) return '$c - $n';
+      if (c.isNotEmpty) return c;
+      if (n.isNotEmpty) return n;
+      return '';
+    }();
+    final titulo = info.titulo;
+    final ruta = info.imagenRuta;
+    final subtotal = info.subtotal;
 
     final cs = Theme.of(context).colorScheme;
-    final bgSel = cs.primary.withValues(alpha: 0.08);
 
-    return FutureBuilder<_VentaItemInfo>(
-      future: _infoVentaCached(v),
-      builder: (context, snap) {
-        final info = snap.data;
-        final titulo = info?.titulo ?? 'Venta';
-        final ruta = info?.imagenRuta;
-
-        return InkWell(
-          onTap: () {
-            if (ancha) {
-              setState(() => _seleccionadaId = v.id);
-            } else {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => VentaDetallePantalla(ventaId: v.id),
-                ),
-              );
-            }
-          },
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-            color: seleccionada ? bgSel : null,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                _avatarVenta(ruta, cancelada: cancelada),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        titulo,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                          color: cancelada ? cs.onSurfaceVariant : null,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        cliente.isEmpty ? '-' : cliente,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: cs.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      '$_moneda ${totalProductos.toStringAsFixed(2)}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: cancelada ? cs.onSurfaceVariant : null,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      _hora24(v.fecha),
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: cs.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+    return FilaListaModulo(
+      onTap: () {
+        if (ancha) {
+          setState(() => _seleccionadaId = v.id);
+        } else {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => VentaDetallePantalla(ventaId: v.id),
+            ),
+          );
+        }
+      },
+      selected: seleccionada,
+      leading: _avatarVenta(ruta, cancelada: cancelada),
+      title: Text(
+        titulo,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+          fontWeight: FontWeight.w600,
+          color: cancelada ? cs.onSurfaceVariant : null,
+        ),
+      ),
+      subtitle: Text(
+        clienteYNota.isEmpty ? '-' : clienteYNota,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: Theme.of(
+          context,
+        ).textTheme.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
+      ),
+      trailing: Column(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Text(
+            '$_moneda ${subtotal.toStringAsFixed(2)}',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+              color: cancelada ? cs.onSurfaceVariant : null,
             ),
           ),
-        );
-      },
+          const SizedBox(height: 2),
+          Text(
+            _hora24(v.fecha),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+          ),
+        ],
+      ),
     );
   }
 
@@ -360,16 +518,14 @@ class _VentasPantallaState extends State<VentasPantalla> {
     }).toList();
   }
 
-  Widget _listaVentas({
-    required bool ancha,
-    required List<Venta> ventas,
-  }) {
+  Widget _listaVentas({required bool ancha, required List<Venta> ventas}) {
     final filtradas = _filtrarVentas(ventas);
 
     if (filtradas.isEmpty) {
       return Expanded(
-        child: Center(
-          child: Text(_q.isEmpty ? 'Todavía no hay ventas' : 'Sin resultados'),
+        child: EstadoListaVacia(
+          titulo: _q.isEmpty ? 'Todavia no hay ventas' : 'Sin resultados',
+          icono: Icons.receipt_long_outlined,
         ),
       );
     }
@@ -423,10 +579,12 @@ class _VentasPantallaState extends State<VentasPantalla> {
 
           final v = r.venta!;
           final seleccionada = ancha && _seleccionadaId == v.id;
+          final info = _infoCache[v.id] ?? _infoFallback(v);
 
           return _filaVenta(
             ancha: ancha,
             v: v,
+            info: info,
             seleccionada: seleccionada,
           );
         },
@@ -441,31 +599,74 @@ class _VentasPantallaState extends State<VentasPantalla> {
         final ancha = _esAncha(c);
 
         return Padding(
-          padding: const EdgeInsets.all(12),
+          padding: TabletMasterDetailLayout.kPagePadding,
           child: FutureBuilder<List<Venta>>(
-            future: _cargar(),
-            key: ValueKey('ventas_future_$_refreshTick'),
+            future: _datosFuture,
             builder: (context, snap) {
               if (snap.connectionState != ConnectionState.done) {
-                return const Center(child: CircularProgressIndicator());
+                return Column(
+                  children: [
+                    PanelControlesModulo(
+                      child: Column(
+                        children: [
+                          if (_mostrarBotonNuevaVenta) _botonNuevaVenta(),
+                          if (_mostrarBotonNuevaVenta)
+                            const SizedBox(height: 10),
+                          _buscador(),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    const Expanded(
+                      child: EstadoListaCargando(mensaje: 'Cargando ventas...'),
+                    ),
+                  ],
+                );
               }
 
-              final ventas = snap.data ?? [];
+              if (snap.hasError) {
+                return Center(
+                  child: EstadoListaError(
+                    mensaje: 'No se pudieron cargar las ventas',
+                    alReintentar: () {
+                      setState(() {
+                        _cancelarHidratacion();
+                        _datosFuture = _cargar();
+                      });
+                    },
+                  ),
+                );
+              }
 
-              if (ancha && _seleccionadaId == null && ventas.isNotEmpty) {
+              final ventas = snap.data ?? const <Venta>[];
+              _programarHidratacionInfo(ventas);
+              final idValida =
+                  _seleccionadaId != null &&
+                  ventas.any((v) => v.id == _seleccionadaId);
+              final idActual = idValida ? _seleccionadaId : null;
+              if (!idValida && _seleccionadaId != null) {
                 WidgetsBinding.instance.addPostFrameCallback((_) {
                   if (!mounted) return;
-                  if (_seleccionadaId == null) setState(() => _seleccionadaId = ventas.first.id);
+                  if (_seleccionadaId != null &&
+                      !ventas.any((v) => v.id == _seleccionadaId)) {
+                    setState(() => _seleccionadaId = null);
+                  }
                 });
               }
 
               Widget panelLista() {
                 return Column(
                   children: [
-                    if (_mostrarBotonNuevaVenta)
-                    _botonNuevaVenta(),
-                    const SizedBox(height: 10),
-                    _buscador(),
+                    PanelControlesModulo(
+                      child: Column(
+                        children: [
+                          if (_mostrarBotonNuevaVenta) _botonNuevaVenta(),
+                          if (_mostrarBotonNuevaVenta)
+                            const SizedBox(height: 10),
+                          _buscador(),
+                        ],
+                      ),
+                    ),
                     const SizedBox(height: 10),
                     _listaVentas(ancha: ancha, ventas: ventas),
                   ],
@@ -474,34 +675,33 @@ class _VentasPantallaState extends State<VentasPantalla> {
 
               if (!ancha) return panelLista();
 
-              final id = _seleccionadaId;
+              final id = idActual;
 
-              return Row(
-                children: [
-                  Expanded(flex: 4, child: panelLista()),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    flex: 6,
-                    child: Card(
-                      clipBehavior: Clip.antiAlias,
-                      child: Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: id == null
-                            ? const Center(child: Text('Elegí una venta'))
-                            : VentaDetallePantalla(
-                          ventaId: id,
-                          embebido: true,
-                          alCambiarAlgo: () {
-                            setState(() {
-                              _refreshTick++;
-                              _infoCache.clear();
-                            });
-                          },
-                        ),
-                      ),
-                    ),
+              return TabletMasterDetailLayout(
+                master: panelLista(),
+                detail: Card(
+                  clipBehavior: Clip.antiAlias,
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: id == null
+                        ? const Center(
+                            child: Text(
+                              'Selecciona una venta para ver detalles',
+                            ),
+                          )
+                        : VentaDetallePantalla(
+                            ventaId: id,
+                            embebido: true,
+                            alCambiarAlgo: () {
+                              setState(() {
+                                _cancelarHidratacion();
+                                _infoCache.clear();
+                                _datosFuture = _cargar();
+                              });
+                            },
+                          ),
                   ),
-                ],
+                ),
               );
             },
           ),
@@ -514,10 +714,14 @@ class _VentasPantallaState extends State<VentasPantalla> {
 class _VentaItemInfo {
   final String titulo;
   final String? imagenRuta;
+  final double subtotal;
+  final String? notaPedidoFallback;
 
   const _VentaItemInfo({
     required this.titulo,
     required this.imagenRuta,
+    required this.subtotal,
+    required this.notaPedidoFallback,
   });
 }
 
@@ -528,11 +732,7 @@ class _RowItem {
   final String? headerText;
   final Venta? venta;
 
-  _RowItem.header(this.headerText)
-      : kind = _RowKind.header,
-        venta = null;
+  _RowItem.header(this.headerText) : kind = _RowKind.header, venta = null;
 
-  _RowItem.venta(this.venta)
-      : kind = _RowKind.venta,
-        headerText = null;
+  _RowItem.venta(this.venta) : kind = _RowKind.venta, headerText = null;
 }

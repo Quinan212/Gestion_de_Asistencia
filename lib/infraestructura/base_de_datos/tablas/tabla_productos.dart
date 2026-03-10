@@ -5,6 +5,18 @@ class TablaProductos extends Table {
 
   TextColumn get nombre => text().withLength(min: 1, max: 120)();
 
+  TextColumn get sku => text().nullable().withLength(min: 0, max: 120)();
+
+  IntColumn get productoPadreId => integer().nullable().references(
+    TablaProductos,
+    #id,
+    onDelete: KeyAction.setNull,
+  )();
+
+  TextColumn get variante => text().nullable().withLength(min: 0, max: 80)();
+
+  TextColumn get subvariante => text().nullable().withLength(min: 0, max: 80)();
+
   TextColumn get unidad => text().withLength(min: 1, max: 30)();
 
   RealColumn get costoActual => real().withDefault(const Constant(0))();

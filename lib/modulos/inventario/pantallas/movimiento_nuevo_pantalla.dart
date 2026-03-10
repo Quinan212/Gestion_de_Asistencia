@@ -50,7 +50,7 @@ class _MovimientoNuevoPantallaState extends State<MovimientoNuevoPantalla> {
         child: Column(
           children: [
             DropdownButtonFormField<String>(
-              value: _tipo,
+              initialValue: _tipo,
               items: const [
                 DropdownMenuItem(value: 'ingreso', child: Text('Ingreso')),
                 DropdownMenuItem(value: 'egreso', child: Text('Egreso')),
