@@ -23,32 +23,47 @@ class FilaListaModulo extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final bgSel = cs.primary.withValues(alpha: 0.08);
+    final bgSel = cs.primary.withValues(alpha: 0.09);
+    final bgHover = cs.primary.withValues(alpha: 0.045);
 
-    return InkWell(
-      onTap: onTap,
-      child: Container(
-        padding: padding,
-        color: selected ? bgSel : null,
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            leading,
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  title,
-                  if (subtitle != null) ...[
-                    const SizedBox(height: 2),
-                    subtitle!,
-                  ],
-                ],
+    return Material(
+      color: selected ? bgSel : Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        hoverColor: bgHover,
+        child: Container(
+          decoration: BoxDecoration(
+            border: Border(
+              left: BorderSide(
+                color: selected ? cs.primary : Colors.transparent,
+                width: 3,
+              ),
+              bottom: BorderSide(
+                color: cs.outlineVariant.withValues(alpha: 0.6),
               ),
             ),
-            if (trailing != null) ...[const SizedBox(width: 12), trailing!],
-          ],
+          ),
+          padding: padding,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              leading,
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    title,
+                    if (subtitle != null) ...[
+                      const SizedBox(height: 2),
+                      subtitle!,
+                    ],
+                  ],
+                ),
+              ),
+              if (trailing != null) ...[const SizedBox(width: 12), trailing!],
+            ],
+          ),
         ),
       ),
     );

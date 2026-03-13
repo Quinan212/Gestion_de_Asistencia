@@ -47,14 +47,14 @@ class RespaldoInspeccion {
 }
 
 class RespaldoLocal {
-  static const String _kTreeUri = 'respaldo_tree_uri_v1';
-  static const String _kRestoreDone = 'respaldo_restore_done_v1';
+  static const String _kTreeUri = 'respaldo_tree_uri_asistencias_v1';
+  static const String _kRestoreDone = 'respaldo_restore_done_asistencias_v1';
 
-  static const String _carpetaRaiz = 'respaldo_app';
-  static const String _archivoDb = 'control_de_mercaderia.sqlite';
+  static const String _carpetaRaiz = 'respaldo_gestion_asistencias';
+  static const String _archivoDb = 'gestion_de_asistencias.sqlite';
 
-  static const String _carpetaFotos = 'productos';
-  static const String _indiceFotos = 'productos_index.json';
+  static const String _carpetaFotos = 'adjuntos';
+  static const String _indiceFotos = 'adjuntos_index.json';
 
   static const String _archivoPrefs = 'prefs.json';
 
@@ -294,13 +294,12 @@ class RespaldoLocal {
 
   // guardá acá TODO lo que quieras “que vuelva igual”
   static const List<String> _prefsKeys = [
-    'config_nombre_negocio',
-    'config_moneda',
-    'config_nota_venta',
-
-    // si después guardás la vista lista/cuadricula del inventario, poné tu key acá:
-    'inventario_vista', // ejemplo
-    // si agregás más configs, sumalas acá
+    'config_nombre_institucion',
+    'config_turno_default',
+    'config_anio_lectivo',
+    'alumnos_busqueda_v1',
+    'cursos_busqueda_v1',
+    'asistencias_ultimo_curso_v1',
   ];
 
   static Future<Map<String, dynamic>> _exportarPrefs() async {

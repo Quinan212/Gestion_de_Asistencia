@@ -17,9 +17,13 @@ class Aplicacion extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Control de mercadería',
+      title: 'Gestion de Asistencias',
       debugShowCheckedModeBanner: false,
       theme: temaSuiteClaro(),
+      scrollBehavior: const MaterialScrollBehavior().copyWith(
+        scrollbars: true,
+        physics: ClampingScrollPhysics(),
+      ),
       initialRoute: Rutas.inicio,
       routes: rutasAplicacion(),
     );

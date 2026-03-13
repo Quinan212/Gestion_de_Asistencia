@@ -2,24 +2,24 @@
 import 'package:flutter/foundation.dart';
 
 import '/infraestructura/base_de_datos/base_de_datos.dart';
+import '/infraestructura/servicios/borrado_jerarquico_servicio.dart';
 
-import '/modulos/inventario/datos/inventario_repositorio.dart';
-import '/modulos/combos/datos/combos_repositorio.dart';
-import '/modulos/ventas/datos/ventas_repositorio.dart';
-import '/modulos/compras/datos/compras_repositorio.dart';
-
-// NUEVO
-import '/modulos/pedidos/datos/pedidos_repositorio.dart';
+import '/modulos/alumnos/datos/alumnos_repositorio.dart';
+import '/modulos/agenda/datos/agenda_docente_repositorio.dart';
+import '/modulos/cursos/datos/cursos_repositorio.dart';
+import '/modulos/asistencias/datos/asistencias_repositorio.dart';
+import '/modulos/instituciones/datos/instituciones_repositorio.dart';
 
 class Proveedores {
   Proveedores._();
 
   static BaseDeDatos? _baseDeDatos;
-  static ComprasRepositorio? _comprasRepositorio;
-  static InventarioRepositorio? _inventarioRepositorio;
-  static VentasRepositorio? _ventasRepositorio;
-  static CombosRepositorio? _combosRepositorio;
-  static PedidosRepositorio? _pedidosRepositorio;
+  static AlumnosRepositorio? _alumnosRepositorio;
+  static AgendaDocenteRepositorio? _agendaDocenteRepositorio;
+  static CursosRepositorio? _cursosRepositorio;
+  static AsistenciasRepositorio? _asistenciasRepositorio;
+  static InstitucionesRepositorio? _institucionesRepositorio;
+  static BorradoJerarquicoServicio? _borradoJerarquicoServicio;
   static final ValueNotifier<int> datosVersion = ValueNotifier<int>(0);
   static final ValueNotifier<String?> estadoSincronizacion = ValueNotifier(
     null,
@@ -27,21 +27,23 @@ class Proveedores {
 
   static BaseDeDatos get baseDeDatos => _baseDeDatos ??= BaseDeDatos();
 
-  static ComprasRepositorio get comprasRepositorio =>
-      _comprasRepositorio ??= ComprasRepositorio(baseDeDatos);
+  static AlumnosRepositorio get alumnosRepositorio =>
+      _alumnosRepositorio ??= AlumnosRepositorio(baseDeDatos);
 
-  static InventarioRepositorio get inventarioRepositorio =>
-      _inventarioRepositorio ??= InventarioRepositorio(baseDeDatos);
+  static AgendaDocenteRepositorio get agendaDocenteRepositorio =>
+      _agendaDocenteRepositorio ??= AgendaDocenteRepositorio(baseDeDatos);
 
-  static VentasRepositorio get ventasRepositorio =>
-      _ventasRepositorio ??= VentasRepositorio(baseDeDatos);
+  static CursosRepositorio get cursosRepositorio =>
+      _cursosRepositorio ??= CursosRepositorio(baseDeDatos);
 
-  static CombosRepositorio get combosRepositorio =>
-      _combosRepositorio ??= CombosRepositorio(baseDeDatos);
+  static AsistenciasRepositorio get asistenciasRepositorio =>
+      _asistenciasRepositorio ??= AsistenciasRepositorio(baseDeDatos);
 
-  // NUEVO
-  static PedidosRepositorio get pedidosRepositorio =>
-      _pedidosRepositorio ??= PedidosRepositorio(baseDeDatos);
+  static InstitucionesRepositorio get institucionesRepositorio =>
+      _institucionesRepositorio ??= InstitucionesRepositorio(baseDeDatos);
+
+  static BorradoJerarquicoServicio get borradoJerarquicoServicio =>
+      _borradoJerarquicoServicio ??= BorradoJerarquicoServicio(baseDeDatos);
 
   static Future<void> cerrarDependencias() async {
     final bd = _baseDeDatos;
@@ -71,10 +73,11 @@ class Proveedores {
 
   static void _limpiarCaches() {
     _baseDeDatos = null;
-    _comprasRepositorio = null;
-    _inventarioRepositorio = null;
-    _ventasRepositorio = null;
-    _combosRepositorio = null;
-    _pedidosRepositorio = null;
+    _alumnosRepositorio = null;
+    _agendaDocenteRepositorio = null;
+    _cursosRepositorio = null;
+    _asistenciasRepositorio = null;
+    _institucionesRepositorio = null;
+    _borradoJerarquicoServicio = null;
   }
 }
