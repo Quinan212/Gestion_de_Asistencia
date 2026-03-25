@@ -12,6 +12,7 @@ import '/infraestructura/dep_inyeccion/proveedores.dart';
 import '/modulos/agenda/datos/agenda_docente_repositorio.dart';
 import '/modulos/agenda/modelos/agenda_docente_item.dart';
 import '/modulos/agenda/modelos/alerta_automatica_docente.dart';
+import '/modulos/agenda/modelos/horario_curso.dart';
 import '/modulos/cursos/modelos/curso.dart';
 
 import '../modelos/clase_asistencia.dart';
@@ -59,6 +60,9 @@ class _AsistenciaPantallaState extends State<AsistenciaPantalla> {
   String _filtroClase = '';
   String _filtroAlumno = '';
   int _selectorMasivoVersion = 0;
+  double? _anchoPanelAsistenciaIzquierda;
+  double? _anchoPanelAsistenciaDetalle;
+  double? _anchoPanelAsistenciaAlertas;
   int? _claseDetalleId;
   int? _alumnoDetalleId;
   int? _claseFormularioId;

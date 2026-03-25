@@ -149,22 +149,28 @@ class CursosRepositorio {
     required int cursoId,
     required int alumnoId,
   }) async {
-    await _db
-        .into(_db.tablaInscripciones)
-        .insert(
-          TablaInscripcionesCompanion.insert(
-            cursoId: cursoId,
-            alumnoId: alumnoId,
-            activo: const Value(true),
-          ),
-          onConflict: DoUpdate(
-            (old) => const TablaInscripcionesCompanion(activo: Value(true)),
-            target: [
-              _db.tablaInscripciones.alumnoId,
-              _db.tablaInscripciones.cursoId,
-            ],
-          ),
-        );
+    await _db.transaction(() async {
+      await _alinearAlumnoAlCursoSiHaceFalta(
+        cursoId: cursoId,
+        alumnoId: alumnoId,
+      );
+      await _db
+          .into(_db.tablaInscripciones)
+          .insert(
+            TablaInscripcionesCompanion.insert(
+              cursoId: cursoId,
+              alumnoId: alumnoId,
+              activo: const Value(true),
+            ),
+            onConflict: DoUpdate(
+              (old) => const TablaInscripcionesCompanion(activo: Value(true)),
+              target: [
+                _db.tablaInscripciones.alumnoId,
+                _db.tablaInscripciones.cursoId,
+              ],
+            ),
+          );
+    });
   }
 
   Future<Set<int>> listarIdsAlumnosInscritosActivos(int cursoId) async {
@@ -202,6 +208,10 @@ class CursosRepositorio {
 
       for (final alumnoId in nuevos) {
         final existente = porAlumno[alumnoId];
+        await _alinearAlumnoAlCursoSiHaceFalta(
+          cursoId: cursoId,
+          alumnoId: alumnoId,
+        );
         if (existente == null) {
           await _db
               .into(_db.tablaInscripciones)
@@ -227,6 +237,35 @@ class CursosRepositorio {
         }
       }
     });
+  }
+
+  Future<void> _alinearAlumnoAlCursoSiHaceFalta({
+    required int cursoId,
+    required int alumnoId,
+  }) async {
+    final curso = await (_db.select(
+      _db.tablaCursos,
+    )..where((t) => t.id.equals(cursoId))).getSingleOrNull();
+    final alumno = await (_db.select(
+      _db.tablaAlumnos,
+    )..where((t) => t.id.equals(alumnoId))).getSingleOrNull();
+    if (curso == null || alumno == null) return;
+
+    final nuevaInstitucionId = alumno.institucionId ?? curso.institucionId;
+    final nuevaCarreraId = alumno.carreraId ?? curso.carreraId;
+    if (nuevaInstitucionId == alumno.institucionId &&
+        nuevaCarreraId == alumno.carreraId) {
+      return;
+    }
+
+    await (_db.update(
+      _db.tablaAlumnos,
+    )..where((t) => t.id.equals(alumnoId))).write(
+      TablaAlumnosCompanion(
+        institucionId: Value(nuevaInstitucionId),
+        carreraId: Value(nuevaCarreraId),
+      ),
+    );
   }
 
   Curso _mapFromJoin(TypedResult row) {

@@ -1,39 +1,37 @@
 import 'package:flutter/material.dart';
 
+import '/aplicacion/tema/estilos_aplicacion.dart';
+
 class PanelControlesModulo extends StatelessWidget {
   final Widget child;
+  final bool destacado;
+  final bool scrollable;
 
-  const PanelControlesModulo({super.key, required this.child});
+  const PanelControlesModulo({
+    super.key,
+    required this.child,
+    this.destacado = false,
+    this.scrollable = true,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final contenido = scrollable
+        ? SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            child: child,
+          )
+        : Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            child: child,
+          );
 
     return DecoratedBox(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.78)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-          BoxShadow(
-            color: Colors.white.withValues(alpha: 0.6),
-            blurRadius: 0,
-            offset: const Offset(0, 1),
-          ),
-        ],
+      decoration: EstilosAplicacion.decoracionPanel(
+        context,
+        destacado: destacado,
       ),
-      child: Card(
-        color: cs.surfaceContainerLowest,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          child: child,
-        ),
-      ),
+      child: contenido,
     );
   }
 }

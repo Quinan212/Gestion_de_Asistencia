@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '/aplicacion/utiles/layout_app.dart';
 import '/aplicacion/utiles/validaciones.dart';
+import '/aplicacion/widgets/campo_combo.dart';
 import '/aplicacion/widgets/estado_lista.dart';
 import '/aplicacion/widgets/panel_controles_modulo.dart';
 import '/infraestructura/dep_inyeccion/proveedores.dart';
@@ -163,6 +164,7 @@ class _InstitucionesPantallaState extends State<InstitucionesPantalla> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
+        scrollable: true,
         title: const Text('Nueva instituci\u00f3n'),
         content: TextField(
           controller: ctrl,
@@ -217,24 +219,26 @@ class _InstitucionesPantallaState extends State<InstitucionesPantalla> {
       builder: (context) => StatefulBuilder(
         builder: (context, setStateDialog) => AlertDialog(
           title: Text(titulo),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(detalle),
-              if (mostrarOpcionAlumnos) ...[
-                const SizedBox(height: 12),
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  value: eliminarAlumnos,
-                  title: const Text('Eliminar alumnos asociados'),
-                  subtitle: const Text(
-                    'Si se desactiva, se conservan y quedan sin asignacion.',
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(detalle),
+                if (mostrarOpcionAlumnos) ...[
+                  const SizedBox(height: 12),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: eliminarAlumnos,
+                    title: const Text('Eliminar alumnos asociados'),
+                    subtitle: const Text(
+                      'Si se desactiva, se conservan y quedan sin asignacion.',
+                    ),
+                    onChanged: (v) => setStateDialog(() => eliminarAlumnos = v),
                   ),
-                  onChanged: (v) => setStateDialog(() => eliminarAlumnos = v),
-                ),
+                ],
               ],
-            ],
+            ),
           ),
           actions: [
             TextButton(
@@ -409,20 +413,14 @@ class _InstitucionesPantallaState extends State<InstitucionesPantalla> {
                         ),
                       ),
                       const SizedBox(height: 12),
-                      DropdownButtonFormField<int>(
-                        initialValue: institucionSeleccionada,
-                        isExpanded: true,
-                        decoration: const InputDecoration(
-                          labelText: 'Institucion',
-                        ),
-                        items: _instituciones
+                      CampoCombo<int>(
+                        value: institucionSeleccionada,
+                        labelText: 'Institucion',
+                        opciones: _instituciones
                             .map(
-                              (i) => DropdownMenuItem<int>(
+                              (i) => CampoComboOpcion<int>(
                                 value: i.id,
-                                child: Text(
-                                  i.nombre,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
+                                etiqueta: i.nombre,
                               ),
                             )
                             .toList(growable: false),
@@ -433,18 +431,14 @@ class _InstitucionesPantallaState extends State<InstitucionesPantalla> {
                         },
                       ),
                       const SizedBox(height: 10),
-                      DropdownButtonFormField<int>(
-                        initialValue: carreraSeleccionada,
-                        isExpanded: true,
-                        decoration: const InputDecoration(labelText: 'Carrera'),
-                        items: _carreras
+                      CampoCombo<int>(
+                        value: carreraSeleccionada,
+                        labelText: 'Carrera',
+                        opciones: _carreras
                             .map(
-                              (carrera) => DropdownMenuItem<int>(
+                              (carrera) => CampoComboOpcion<int>(
                                 value: carrera.id,
-                                child: Text(
-                                  carrera.nombre,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
+                                etiqueta: carrera.nombre,
                               ),
                             )
                             .toList(growable: false),
@@ -472,7 +466,7 @@ class _InstitucionesPantallaState extends State<InstitucionesPantalla> {
                 if (!esDesktop) {
                   return Column(
                     children: [
-                      panelControles,
+                      Flexible(fit: FlexFit.loose, child: panelControles),
                       const SizedBox(height: 10),
                       Expanded(child: contenidoMaterias),
                     ],
@@ -483,7 +477,10 @@ class _InstitucionesPantallaState extends State<InstitucionesPantalla> {
                   children: [
                     SizedBox(
                       width: c.maxWidth >= 1500 ? 420 : 360,
-                      child: panelControles,
+                      child: Align(
+                        alignment: Alignment.topCenter,
+                        child: SingleChildScrollView(child: panelControles),
+                      ),
                     ),
                     const SizedBox(width: 14),
                     Expanded(child: contenidoMaterias),

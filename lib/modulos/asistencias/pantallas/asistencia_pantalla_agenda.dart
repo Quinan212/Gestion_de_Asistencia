@@ -117,7 +117,7 @@ extension _AsistenciaPantallaAgenda on _AsistenciaPantallaState {
     }
   }
 
-  Widget _panelAlertasAgendaAsistencias() {
+  Widget _panelAlertasAgendaAsistencias({bool expandidoCompleto = false}) {
     return Card(
       margin: EdgeInsets.zero,
       child: Padding(
@@ -149,89 +149,81 @@ extension _AsistenciaPantallaAgenda on _AsistenciaPantallaState {
               ),
             ),
             const SizedBox(height: 10),
-            Expanded(
-              child: _cargandoAgenda
-                  ? const EstadoListaCargando(mensaje: 'Cargando alertas...')
-                  : _alertasAgenda.isEmpty
-                  ? const EstadoListaVacia(
-                      titulo: 'No hay alertas activas',
-                      icono: Icons.task_alt_outlined,
-                    )
-                  : ListView.separated(
-                      itemCount: _alertasAgenda.length.clamp(0, 8).toInt(),
-                      separatorBuilder: (_, _) => const Divider(height: 1),
-                      itemBuilder: (_, index) {
-                        final alerta = _alertasAgenda[index];
-                        final posponiendo = _alertasAgendaPosponiendo.contains(
-                          alerta.clave,
-                        );
-                        return ListTile(
-                          dense: true,
-                          contentPadding: EdgeInsets.zero,
-                          title: Text(
-                            '[${alerta.severidad}] ${alerta.mensaje}',
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          subtitle: Text(
-                            '${alerta.institucion ?? 'Sin institucion'} | ${_etiquetaCursoAlertaAgenda(alerta.cursoId)}',
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          trailing: PopupMenuButton<int>(
-                            enabled: !posponiendo,
-                            tooltip: 'Posponer alerta',
-                            onSelected: (value) {
-                              if (value == 1) {
-                                _posponerAlertaAgenda(
-                                  alerta,
-                                  const Duration(hours: 24),
-                                );
-                              } else if (value == 3) {
-                                _posponerAlertaAgenda(
-                                  alerta,
-                                  const Duration(days: 3),
-                                );
-                              } else if (value == 7) {
-                                _posponerAlertaAgenda(
-                                  alerta,
-                                  const Duration(days: 7),
-                                );
-                              }
-                            },
-                            itemBuilder: (context) => const [
-                              PopupMenuItem(
-                                value: 1,
-                                child: Text('Posponer 24h'),
-                              ),
-                              PopupMenuItem(
-                                value: 3,
-                                child: Text('Posponer 3 dias'),
-                              ),
-                              PopupMenuItem(
-                                value: 7,
-                                child: Text('Posponer 7 dias'),
-                              ),
-                            ],
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                              ),
-                              child: posponiendo
-                                  ? const SizedBox(
-                                      width: 16,
-                                      height: 16,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                      ),
-                                    )
-                                  : const Icon(Icons.snooze_outlined),
-                            ),
-                          ),
-                        );
-                      },
+            if (_cargandoAgenda)
+              const EstadoListaCargando(mensaje: 'Cargando alertas...')
+            else if (_alertasAgenda.isEmpty)
+              const EstadoListaVacia(
+                titulo: 'No hay alertas activas',
+                icono: Icons.task_alt_outlined,
+              )
+            else
+              ListView.separated(
+                shrinkWrap: expandidoCompleto,
+                physics: expandidoCompleto
+                    ? const NeverScrollableScrollPhysics()
+                    : null,
+                itemCount: _alertasAgenda.length,
+                separatorBuilder: (_, _) => const Divider(height: 1),
+                itemBuilder: (_, index) {
+                  final alerta = _alertasAgenda[index];
+                  final posponiendo = _alertasAgendaPosponiendo.contains(
+                    alerta.clave,
+                  );
+                  return ListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(
+                      '[${alerta.severidad}] ${alerta.mensaje}',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
-            ),
+                    subtitle: Text(
+                      '${alerta.institucion ?? 'Sin institucion'} | ${_etiquetaCursoAlertaAgenda(alerta.cursoId)}',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    trailing: PopupMenuButton<int>(
+                      enabled: !posponiendo,
+                      tooltip: 'Posponer alerta',
+                      onSelected: (value) {
+                        if (value == 1) {
+                          _posponerAlertaAgenda(
+                            alerta,
+                            const Duration(hours: 24),
+                          );
+                        } else if (value == 3) {
+                          _posponerAlertaAgenda(
+                            alerta,
+                            const Duration(days: 3),
+                          );
+                        } else if (value == 7) {
+                          _posponerAlertaAgenda(
+                            alerta,
+                            const Duration(days: 7),
+                          );
+                        }
+                      },
+                      itemBuilder: (context) => const [
+                        PopupMenuItem(value: 1, child: Text('Posponer 24h')),
+                        PopupMenuItem(value: 3, child: Text('Posponer 3 dias')),
+                        PopupMenuItem(value: 7, child: Text('Posponer 7 dias')),
+                      ],
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        child: posponiendo
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.snooze_outlined),
+                      ),
+                    ),
+                  );
+                },
+              ),
           ],
         ),
       ),

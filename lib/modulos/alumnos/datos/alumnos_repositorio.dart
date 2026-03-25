@@ -52,6 +52,49 @@ class AlumnosRepositorio {
     return rows.map(_mapFromJoin).toList(growable: false);
   }
 
+  Future<List<Alumno>> listarDisponiblesParaCurso({
+    required int institucionId,
+    required int carreraId,
+  }) async {
+    final rows =
+        await (_db.select(_db.tablaAlumnos).join([
+              leftOuterJoin(
+                _db.tablaInstituciones,
+                _db.tablaInstituciones.id.equalsExp(
+                  _db.tablaAlumnos.institucionId,
+                ),
+              ),
+              leftOuterJoin(
+                _db.tablaCarreras,
+                _db.tablaCarreras.id.equalsExp(_db.tablaAlumnos.carreraId),
+              ),
+            ])..where(
+              _db.tablaAlumnos.activo.equals(true) &
+                  (_db.tablaAlumnos.institucionId.equals(institucionId) &
+                          _db.tablaAlumnos.carreraId.equals(carreraId) |
+                      _db.tablaAlumnos.institucionId.isNull() |
+                      _db.tablaAlumnos.carreraId.isNull()),
+            ))
+            .get();
+
+    final alumnos = rows.map(_mapFromJoin).toList(growable: false);
+    alumnos.sort((a, b) {
+      final aMismaCarrera =
+          a.institucionId == institucionId && a.carreraId == carreraId;
+      final bMismaCarrera =
+          b.institucionId == institucionId && b.carreraId == carreraId;
+      if (aMismaCarrera != bMismaCarrera) {
+        return aMismaCarrera ? -1 : 1;
+      }
+      final cmpApellido = a.apellido.toLowerCase().compareTo(
+        b.apellido.toLowerCase(),
+      );
+      if (cmpApellido != 0) return cmpApellido;
+      return a.nombre.toLowerCase().compareTo(b.nombre.toLowerCase());
+    });
+    return alumnos;
+  }
+
   Future<int> crear({
     required String apellido,
     required String nombre,

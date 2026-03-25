@@ -721,6 +721,12 @@ class _DialogClaseActualRapidaState extends State<_DialogClaseActualRapida> {
       return null;
     }
 
+    final horariosDelDia = await Proveedores.asistenciasRepositorio
+        .listarHorariosCursoParaFecha(
+          cursoId: widget.cursoId,
+          fecha: _soloFecha(widget.fecha),
+        );
+    final horarioClase = horariosDelDia.isEmpty ? null : horariosDelDia.first;
     final nuevaClaseId = await Proveedores.asistenciasRepositorio.crearClase(
       cursoId: widget.cursoId,
       fecha: _soloFecha(widget.fecha),
@@ -729,6 +735,7 @@ class _DialogClaseActualRapidaState extends State<_DialogClaseActualRapida> {
       actividadDia: _actividadCtrl.text,
       estadoContenido: _estadoContenido,
       resultadoActividad: _resultadoActividad,
+      horario: horarioClase,
     );
     await Proveedores.asistenciasRepositorio.marcarEstadoParaTodos(
       claseId: nuevaClaseId,

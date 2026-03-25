@@ -43,3 +43,18 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Local generated content and sensitive files
+/.codex_tmp_textos/
+/.tessdata/
+/alan-670.tailf3d03e.ts.net.crt
+/alan-670.tailf3d03e.ts.net.key
+/ocr_2.txt
+/ocr_2_limpio.txt
+/ocr_3.txt
+/ocr_3_limpio.txt
+/tmp_insertar_marcadores_fragmentos.py
+/tmp_textos_a_feudo_34.py
+/tmp_textos_a_feudo_56.py
+/tmp_textos_a_feudo_78.py
+/scripts/Normalize-SeriesEpisodes.ps1

@@ -1,6 +1,86 @@
 part of 'asistencia_pantalla.dart';
 
 extension _AsistenciaPantallaDetalles on _AsistenciaPantallaState {
+  List<HorarioCurso> _horariosDelCursoParaFecha(
+    List<HorarioCurso> horarios,
+    DateTime fecha,
+  ) {
+    final filtrados = horarios
+        .where((horario) => horario.diaSemana == fecha.weekday)
+        .toList(growable: false);
+    filtrados.sort((a, b) {
+      final cmpInicio = a.horaInicio.compareTo(b.horaInicio);
+      if (cmpInicio != 0) return cmpInicio;
+      return a.id.compareTo(b.id);
+    });
+    return filtrados;
+  }
+
+  HorarioCurso? _resolverHorarioPredeterminado(
+    List<HorarioCurso> horarios, {
+    int? horarioIdPreferido,
+  }) {
+    if (horarios.isEmpty) return null;
+    if (horarioIdPreferido != null) {
+      for (final horario in horarios) {
+        if (horario.id == horarioIdPreferido) return horario;
+      }
+    }
+    return horarios.first;
+  }
+
+  String _labelDiaSemana(int diaSemana) {
+    switch (diaSemana) {
+      case DateTime.monday:
+        return 'Lunes';
+      case DateTime.tuesday:
+        return 'Martes';
+      case DateTime.wednesday:
+        return 'Miercoles';
+      case DateTime.thursday:
+        return 'Jueves';
+      case DateTime.friday:
+        return 'Viernes';
+      case DateTime.saturday:
+        return 'Sabado';
+      case DateTime.sunday:
+      default:
+        return 'Domingo';
+    }
+  }
+
+  String _labelHorarioCurso(HorarioCurso horario) {
+    final aula = (horario.aula ?? '').trim();
+    final partes = <String>[_labelDiaSemana(horario.diaSemana), horario.franja];
+    if (aula.isNotEmpty) {
+      partes.add(aula);
+    }
+    return partes.join(' | ');
+  }
+
+  String? _resumenHorarioClase(ClaseAsistencia clase) {
+    final franja = clase.franjaHoraria;
+    final aula = (clase.aula ?? '').trim();
+    if (franja == null && aula.isEmpty) return null;
+    if (franja == null) return aula;
+    if (aula.isEmpty) return franja;
+    return '$franja | $aula';
+  }
+
+  String _subtituloClase(ClaseAsistencia clase) {
+    final horario = _resumenHorarioClase(clase);
+    final tema = (clase.tema ?? '').trim();
+    final partes = <String>[];
+    if (horario != null) {
+      partes.add(horario);
+    }
+    if (tema.isNotEmpty) {
+      partes.add(tema);
+    }
+    if (partes.isEmpty) return 'Sin tema cargado';
+    return partes.join(' | ');
+  }
+
   void _sincronizarFormularioClase(
     ClaseAsistencia? clase, {
     bool forzar = false,

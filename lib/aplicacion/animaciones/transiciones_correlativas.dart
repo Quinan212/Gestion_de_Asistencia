@@ -6,7 +6,9 @@ import 'package:flutter/material.dart';
 class TransicionesCorrelativas {
   static const Duration duracionSizeAcordeon = Duration(milliseconds: 320);
   static const Duration duracionEntradaAcordeon = Duration(milliseconds: 240);
+  static const Duration duracionCambioPantalla = Duration(milliseconds: 260);
   static const Curve curvaPrincipal = Curves.easeOutCubic;
+  static const Offset desplazamientoCambioPantalla = Offset(0.02, 0.03);
 
   static Widget contenidoAcordeon({
     required bool expandido,

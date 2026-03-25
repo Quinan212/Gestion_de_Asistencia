@@ -610,9 +610,18 @@ class _ReportesAsistenciaPantallaState
             if (!esDesktop) {
               return Column(
                 children: [
-                  panelControles,
-                  const SizedBox(height: 10),
-                  _resumenGeneral(),
+                  Flexible(
+                    fit: FlexFit.loose,
+                    child: SingleChildScrollView(
+                      child: Column(
+                        children: [
+                          panelControles,
+                          const SizedBox(height: 10),
+                          _resumenGeneral(),
+                        ],
+                      ),
+                    ),
+                  ),
                   const SizedBox(height: 10),
                   Expanded(child: panelTabs),
                 ],
@@ -623,12 +632,17 @@ class _ReportesAsistenciaPantallaState
               children: [
                 SizedBox(
                   width: 390,
-                  child: Column(
-                    children: [
-                      panelControles,
-                      const SizedBox(height: 10),
-                      _resumenGeneral(),
-                    ],
+                  child: Align(
+                    alignment: Alignment.topCenter,
+                    child: SingleChildScrollView(
+                      child: Column(
+                        children: [
+                          panelControles,
+                          const SizedBox(height: 10),
+                          _resumenGeneral(),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
                 const SizedBox(width: 10),

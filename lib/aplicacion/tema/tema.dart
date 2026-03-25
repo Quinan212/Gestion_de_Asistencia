@@ -1,39 +1,40 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import 'estilos_aplicacion.dart';
+
 ThemeData temaSuiteClaro() {
   final esWindows = defaultTargetPlatform == TargetPlatform.windows;
   final colorScheme =
       ColorScheme.fromSeed(
-        seedColor: const Color(0xFF005FB8),
+        seedColor: EstilosAplicacion.marca,
         brightness: Brightness.light,
       ).copyWith(
-        primary: const Color(0xFF005FB8),
+        primary: EstilosAplicacion.marca,
         onPrimary: Colors.white,
-        primaryContainer: const Color(0xFFD6E7FF),
-        onPrimaryContainer: const Color(0xFF001B3D),
-        secondary: const Color(0xFF365E8D),
+        primaryContainer: const Color(0xFFDCECF5),
+        onPrimaryContainer: const Color(0xFF04253A),
+        secondary: EstilosAplicacion.acento,
         onSecondary: Colors.white,
-        surface: const Color(0xFFF2F4F8),
-        surfaceContainerLowest: Colors.white,
-        surfaceContainerLow: const Color(0xFFFCFCFD),
-        surfaceContainer: const Color(0xFFF7F8FB),
-        surfaceContainerHigh: const Color(0xFFEFF2F7),
-        surfaceContainerHighest: const Color(0xFFE7EBF2),
-        outline: const Color(0xFF737F8B),
-        outlineVariant: const Color(0xFFC4CBD5),
+        secondaryContainer: const Color(0xFFDCE4FF),
+        onSecondaryContainer: const Color(0xFF152A64),
+        surface: EstilosAplicacion.fondoClaro,
+        surfaceContainerLowest: EstilosAplicacion.superficieClaro,
+        surfaceContainerLow: const Color(0xFFFFFFFF),
+        surfaceContainer: const Color(0xFFF8FAFC),
+        surfaceContainerHigh: const Color(0xFFF1F5F9),
+        surfaceContainerHighest: const Color(0xFFE7EEF5),
+        outline: const Color(0xFF6B7280),
+        outlineVariant: EstilosAplicacion.bordeClaro,
       );
   final base = ThemeData(
     useMaterial3: true,
     brightness: Brightness.light,
     colorScheme: colorScheme,
-    fontFamily: esWindows ? 'Segoe UI' : null,
+    fontFamily: 'Inter',
   );
   final cs = base.colorScheme;
   final densidad = esWindows ? VisualDensity.compact : VisualDensity.standard;
-  final r8 = RoundedRectangleBorder(borderRadius: BorderRadius.circular(8));
-  final r10 = RoundedRectangleBorder(borderRadius: BorderRadius.circular(10));
-  final r12 = RoundedRectangleBorder(borderRadius: BorderRadius.circular(12));
 
   var texto = base.textTheme.copyWith(
     headlineSmall: base.textTheme.headlineSmall?.copyWith(
@@ -68,11 +69,12 @@ ThemeData temaSuiteClaro() {
         ? MaterialTapTargetSize.shrinkWrap
         : MaterialTapTargetSize.padded,
     textTheme: texto,
+    primaryTextTheme: texto,
     scaffoldBackgroundColor: cs.surface,
     canvasColor: cs.surface,
     appBarTheme: AppBarTheme(
       centerTitle: false,
-      backgroundColor: cs.surfaceContainerLowest,
+      backgroundColor: Colors.transparent,
       foregroundColor: cs.onSurface,
       surfaceTintColor: Colors.transparent,
       elevation: 0,
@@ -82,8 +84,9 @@ ThemeData temaSuiteClaro() {
     cardTheme: CardThemeData(
       elevation: 0,
       color: cs.surfaceContainerLowest,
-      shape: r12.copyWith(
-        side: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.72)),
+      shape: RoundedRectangleBorder(
+        borderRadius: EstilosAplicacion.radioPanel,
+        side: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.92)),
       ),
       margin: EdgeInsets.zero,
       clipBehavior: Clip.antiAlias,
@@ -98,20 +101,20 @@ ThemeData temaSuiteClaro() {
       filled: true,
       fillColor: cs.surfaceContainerLowest,
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: EstilosAplicacion.radioSuave,
         borderSide: BorderSide(color: cs.outlineVariant),
       ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: EstilosAplicacion.radioSuave,
         borderSide: BorderSide(
           color: cs.outlineVariant.withValues(alpha: 0.95),
         ),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
-        borderSide: BorderSide(color: cs.primary, width: 1.6),
+        borderRadius: EstilosAplicacion.radioSuave,
+        borderSide: BorderSide(color: cs.primary, width: 1.4),
       ),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 11, vertical: 10),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       labelStyle: TextStyle(color: cs.onSurfaceVariant),
       hintStyle: TextStyle(color: cs.onSurfaceVariant.withValues(alpha: 0.9)),
       isDense: esWindows,
@@ -119,27 +122,36 @@ ThemeData temaSuiteClaro() {
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
         elevation: 0,
-        minimumSize: const Size(0, 40),
-        shape: r10,
+        minimumSize: const Size(0, 44),
+        backgroundColor: cs.primary,
+        foregroundColor: cs.onPrimary,
+        shape: RoundedRectangleBorder(
+          borderRadius: EstilosAplicacion.radioSuave,
+        ),
         textStyle: const TextStyle(fontWeight: FontWeight.w600),
       ),
     ),
     iconButtonTheme: IconButtonThemeData(
       style: IconButton.styleFrom(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        backgroundColor: cs.surfaceContainerLowest.withValues(alpha: 0.72),
+        foregroundColor: cs.onSurfaceVariant,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
-        minimumSize: const Size(0, 40),
-        shape: r8,
+        minimumSize: const Size(0, 44),
+        shape: RoundedRectangleBorder(
+          borderRadius: EstilosAplicacion.radioSuave,
+        ),
+        backgroundColor: cs.surfaceContainerLowest.withValues(alpha: 0.78),
         side: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.95)),
         textStyle: const TextStyle(fontWeight: FontWeight.w600),
       ),
     ),
     textButtonTheme: TextButtonThemeData(
       style: TextButton.styleFrom(
-        shape: r8,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         textStyle: const TextStyle(fontWeight: FontWeight.w600),
       ),
     ),
@@ -148,8 +160,8 @@ ThemeData temaSuiteClaro() {
       selectedColor: cs.primary.withValues(alpha: 0.12),
       side: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.9)),
       labelStyle: TextStyle(color: cs.onSurface),
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
     ),
     navigationBarTheme: NavigationBarThemeData(
       backgroundColor: cs.surfaceContainerLowest,
@@ -178,15 +190,16 @@ ThemeData temaSuiteClaro() {
     ),
     listTileTheme: ListTileThemeData(
       dense: esWindows,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       iconColor: cs.onSurfaceVariant,
       selectedTileColor: cs.primary.withValues(alpha: 0.09),
       selectedColor: cs.primary,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
     ),
     dialogTheme: DialogThemeData(
       backgroundColor: cs.surfaceContainerLowest,
-      shape: r12.copyWith(
+      shape: RoundedRectangleBorder(
+        borderRadius: EstilosAplicacion.radioPanel,
         side: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.75)),
       ),
       titleTextStyle: texto.titleLarge?.copyWith(color: cs.onSurface),
@@ -194,7 +207,8 @@ ThemeData temaSuiteClaro() {
     ),
     popupMenuTheme: PopupMenuThemeData(
       color: cs.surfaceContainerLowest,
-      shape: r10.copyWith(
+      shape: RoundedRectangleBorder(
+        borderRadius: EstilosAplicacion.radioSuave,
         side: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.8)),
       ),
       textStyle: texto.bodyMedium,
@@ -204,7 +218,8 @@ ThemeData temaSuiteClaro() {
         backgroundColor: WidgetStatePropertyAll(cs.surfaceContainerLowest),
         surfaceTintColor: const WidgetStatePropertyAll(Colors.transparent),
         shape: WidgetStatePropertyAll(
-          r10.copyWith(
+          RoundedRectangleBorder(
+            borderRadius: EstilosAplicacion.radioSuave,
             side: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.8)),
           ),
         ),
@@ -232,9 +247,9 @@ ThemeData temaSuiteClaro() {
     ),
     expansionTileTheme: ExpansionTileThemeData(
       collapsedShape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(14),
       ),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       iconColor: cs.onSurfaceVariant,
       collapsedIconColor: cs.onSurfaceVariant,
     ),

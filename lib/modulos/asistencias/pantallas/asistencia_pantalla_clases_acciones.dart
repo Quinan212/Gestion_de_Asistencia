@@ -6,6 +6,8 @@ extension _AsistenciaPantallaClasesAcciones on _AsistenciaPantallaState {
     if (cursoId == null || _guardando) return;
     final inscriptos = await Proveedores.cursosRepositorio
         .contarInscritosActivos(cursoId);
+    final horariosCurso = await Proveedores.agendaDocenteRepositorio
+        .listarHorariosCurso(cursoId);
     if (!mounted) return;
     if (inscriptos <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -21,61 +23,157 @@ extension _AsistenciaPantallaClasesAcciones on _AsistenciaPantallaState {
     final temaCtrl = TextEditingController();
     DateTime fechaSeleccionada = _soloFecha(DateTime.now());
     bool inicializarPendientes = true;
+    HorarioCurso? horarioSeleccionado = _resolverHorarioPredeterminado(
+      _horariosDelCursoParaFecha(horariosCurso, fechaSeleccionada),
+    );
 
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setStateDialog) {
+            final horariosDelDia = _horariosDelCursoParaFecha(
+              horariosCurso,
+              fechaSeleccionada,
+            );
+            final horarioSeleccionadoActual = _resolverHorarioPredeterminado(
+              horariosDelDia,
+              horarioIdPreferido: horarioSeleccionado?.id,
+            );
+            horarioSeleccionado = horarioSeleccionadoActual;
+
             return AlertDialog(
               title: const Text('Nueva clase'),
-              content: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 520),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: const Icon(Icons.calendar_today_outlined),
-                      title: const Text('Fecha de clase'),
-                      subtitle: Text(_fechaClase(fechaSeleccionada)),
-                      trailing: TextButton(
-                        onPressed: () async {
-                          final hoy = _soloFecha(DateTime.now());
-                          final elegida = await showDatePicker(
-                            context: context,
-                            initialDate: fechaSeleccionada,
-                            firstDate: DateTime(hoy.year - 3, 1, 1),
-                            lastDate: DateTime(hoy.year + 5, 12, 31),
-                          );
-                          if (elegida == null) return;
-                          setStateDialog(() {
-                            fechaSeleccionada = _soloFecha(elegida);
-                          });
-                        },
-                        child: const Text('Cambiar'),
+              content: SingleChildScrollView(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 520),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.calendar_today_outlined),
+                        title: const Text('Fecha de clase'),
+                        subtitle: Text(_fechaClase(fechaSeleccionada)),
+                        trailing: TextButton(
+                          onPressed: () async {
+                            final hoy = _soloFecha(DateTime.now());
+                            final elegida = await showDatePicker(
+                              context: context,
+                              initialDate: fechaSeleccionada,
+                              firstDate: DateTime(hoy.year - 3, 1, 1),
+                              lastDate: DateTime(hoy.year + 5, 12, 31),
+                            );
+                            if (elegida == null) return;
+                            setStateDialog(() {
+                              fechaSeleccionada = _soloFecha(elegida);
+                              horarioSeleccionado =
+                                  _resolverHorarioPredeterminado(
+                                    _horariosDelCursoParaFecha(
+                                      horariosCurso,
+                                      fechaSeleccionada,
+                                    ),
+                                    horarioIdPreferido: horarioSeleccionado?.id,
+                                  );
+                            });
+                          },
+                          child: const Text('Cambiar'),
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 8),
-                    TextField(
-                      controller: temaCtrl,
-                      decoration: const InputDecoration(
-                        labelText: 'Tema (opcional)',
-                        hintText: 'Ej: Repaso de fracciones',
+                      const SizedBox(height: 8),
+                      if (horariosCurso.isEmpty)
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.surfaceContainerLow,
+                            border: Border.all(
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.outlineVariant,
+                            ),
+                          ),
+                          child: const Text(
+                            'Este curso no tiene horarios cargados. La clase se creara solo con fecha.',
+                          ),
+                        )
+                      else if (horariosDelDia.isEmpty)
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.surfaceContainerLow,
+                            border: Border.all(
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.outlineVariant,
+                            ),
+                          ),
+                          child: Text(
+                            'No hay horario cargado para ${_labelDiaSemana(fechaSeleccionada.weekday)}. La clase se creara sin bloque horario.',
+                          ),
+                        )
+                      else if (horariosDelDia.length == 1)
+                        ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: const Icon(Icons.schedule_outlined),
+                          title: const Text('Horario vinculado'),
+                          subtitle: Text(
+                            _labelHorarioCurso(horariosDelDia.first),
+                          ),
+                        )
+                      else
+                        DropdownButtonFormField<int>(
+                          initialValue: horarioSeleccionadoActual?.id,
+                          decoration: const InputDecoration(
+                            labelText: 'Bloque horario del dia',
+                            prefixIcon: Icon(Icons.schedule_outlined),
+                          ),
+                          items: horariosDelDia
+                              .map(
+                                (horario) => DropdownMenuItem<int>(
+                                  value: horario.id,
+                                  child: Text(_labelHorarioCurso(horario)),
+                                ),
+                              )
+                              .toList(growable: false),
+                          onChanged: (value) {
+                            setStateDialog(() {
+                              horarioSeleccionado =
+                                  _resolverHorarioPredeterminado(
+                                    horariosDelDia,
+                                    horarioIdPreferido: value,
+                                  );
+                            });
+                          },
+                        ),
+                      if (horariosCurso.isNotEmpty) const SizedBox(height: 8),
+                      TextField(
+                        controller: temaCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'Tema (opcional)',
+                          hintText: 'Ej: Repaso de fracciones',
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 12),
-                    SwitchListTile.adaptive(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('Inicializar en "Pendiente"'),
-                      subtitle: const Text(
-                        'Crea asistencia para todos sin marcarlos como presentes.',
+                      const SizedBox(height: 12),
+                      SwitchListTile.adaptive(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Inicializar en "Pendiente"'),
+                        subtitle: const Text(
+                          'Crea asistencia para todos sin marcarlos como presentes.',
+                        ),
+                        value: inicializarPendientes,
+                        onChanged: (v) =>
+                            setStateDialog(() => inicializarPendientes = v),
                       ),
-                      value: inicializarPendientes,
-                      onChanged: (v) =>
-                          setStateDialog(() => inicializarPendientes = v),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
               actions: [
@@ -94,7 +192,10 @@ extension _AsistenciaPantallaClasesAcciones on _AsistenciaPantallaState {
       },
     );
 
-    if (ok != true || !mounted) return;
+    if (ok != true || !mounted) {
+      temaCtrl.dispose();
+      return;
+    }
 
     _actualizarEstado(() => _guardando = true);
     try {
@@ -102,6 +203,7 @@ extension _AsistenciaPantallaClasesAcciones on _AsistenciaPantallaState {
         cursoId: cursoId,
         fecha: fechaSeleccionada,
         tema: temaCtrl.text,
+        horario: horarioSeleccionado,
       );
 
       if (inicializarPendientes) {
@@ -126,6 +228,7 @@ extension _AsistenciaPantallaClasesAcciones on _AsistenciaPantallaState {
         const SnackBar(content: Text('No se pudo crear la clase')),
       );
     } finally {
+      temaCtrl.dispose();
       if (mounted) _actualizarEstado(() => _guardando = false);
     }
   }
@@ -245,6 +348,7 @@ extension _AsistenciaPantallaClasesAcciones on _AsistenciaPantallaState {
     final confirmar = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
+        scrollable: true,
         title: const Text('Eliminar clase'),
         content: Text(
           'Se eliminara la clase del ${_fechaClase(claseActual.fecha)}'

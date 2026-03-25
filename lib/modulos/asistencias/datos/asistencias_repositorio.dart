@@ -2,6 +2,7 @@ import 'package:drift/drift.dart';
 
 import '/infraestructura/base_de_datos/base_de_datos.dart';
 import '/modulos/alumnos/modelos/alumno.dart';
+import '/modulos/agenda/modelos/horario_curso.dart';
 
 import '../modelos/clase_asistencia.dart';
 import '../modelos/estado_asistencia.dart';
@@ -20,7 +21,11 @@ class AsistenciasRepositorio {
     String? actividadDia,
     String? estadoContenido,
     String? resultadoActividad,
+    HorarioCurso? horario,
   }) async {
+    final horaInicio = _normalizarHora(horario?.horaInicio);
+    final horaFin = _normalizarHora(horario?.horaFin);
+    final aula = _nullSiVacio(horario?.aula);
     final id = await _db
         .into(_db.tablaClases)
         .insert(
@@ -37,10 +42,20 @@ class AsistenciasRepositorio {
       UPDATE tabla_clases
       SET
         estado_contenido = ?,
-        resultado_actividad = ?
+        resultado_actividad = ?,
+        hora_inicio = ?,
+        hora_fin = ?,
+        aula = ?
       WHERE id = ?
       ''',
-      [_nullSiVacio(estadoContenido), _nullSiVacio(resultadoActividad), id],
+      [
+        _nullSiVacio(estadoContenido),
+        _nullSiVacio(resultadoActividad),
+        horaInicio,
+        horaFin,
+        aula,
+        id,
+      ],
     );
     return id;
   }
@@ -90,10 +105,20 @@ class AsistenciasRepositorio {
         observacion,
         actividad_dia,
         estado_contenido,
-        resultado_actividad
+        resultado_actividad,
+        hora_inicio,
+        hora_fin,
+        aula
       FROM tabla_clases
       WHERE curso_id = ?
-      ORDER BY fecha DESC
+      ORDER BY
+        fecha DESC,
+        CASE
+          WHEN hora_inicio IS NULL OR TRIM(hora_inicio) = '' THEN 1
+          ELSE 0
+        END ASC,
+        hora_inicio ASC,
+        id DESC
       LIMIT ?
       ''',
           variables: [Variable<int>(cursoId), Variable<int>(limite)],
@@ -110,9 +135,42 @@ class AsistenciasRepositorio {
             actividadDia: r.read<String?>('actividad_dia'),
             estadoContenido: r.read<String?>('estado_contenido'),
             resultadoActividad: r.read<String?>('resultado_actividad'),
+            horaInicio: r.read<String?>('hora_inicio'),
+            horaFin: r.read<String?>('hora_fin'),
+            aula: r.read<String?>('aula'),
           ),
         )
         .toList();
+  }
+
+  Future<List<HorarioCurso>> listarHorariosCursoParaFecha({
+    required int cursoId,
+    required DateTime fecha,
+  }) async {
+    final rows = await _db
+        .customSelect(
+          '''
+      SELECT id, curso_id, dia_semana, hora_inicio, hora_fin, aula
+      FROM tabla_horarios_curso
+      WHERE curso_id = ? AND activo = 1 AND dia_semana = ?
+      ORDER BY hora_inicio ASC, id ASC
+      ''',
+          variables: [Variable<int>(cursoId), Variable<int>(fecha.weekday)],
+        )
+        .get();
+
+    return rows
+        .map(
+          (row) => HorarioCurso(
+            id: row.read<int>('id'),
+            cursoId: row.read<int>('curso_id'),
+            diaSemana: row.read<int>('dia_semana'),
+            horaInicio: row.read<String>('hora_inicio'),
+            horaFin: row.read<String?>('hora_fin'),
+            aula: row.read<String?>('aula'),
+          ),
+        )
+        .toList(growable: false);
   }
 
   Future<List<Alumno>> listarAlumnosDeCurso(int cursoId) async {
@@ -312,6 +370,14 @@ class AsistenciasRepositorio {
   String? _nullSiVacio(String? value) {
     final t = (value ?? '').trim();
     return t.isEmpty ? null : t;
+  }
+
+  String? _normalizarHora(String? value) {
+    final t = (value ?? '').trim();
+    if (t.isEmpty) return null;
+    final regex = RegExp(r'^(?:[01]\d|2[0-3]):[0-5]\d$');
+    if (!regex.hasMatch(t)) return null;
+    return t;
   }
 
   DateTime _fechaDesdeEpoch(int epochSegundos) {

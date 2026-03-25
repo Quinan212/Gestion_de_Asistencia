@@ -122,7 +122,7 @@ class _CursosPantallaState extends State<CursosPantalla> {
           if (!esDesktop) {
             return Column(
               children: [
-                panelControles,
+                Flexible(fit: FlexFit.loose, child: panelControles),
                 const SizedBox(height: 12),
                 Expanded(child: listado),
               ],
@@ -132,7 +132,13 @@ class _CursosPantallaState extends State<CursosPantalla> {
           final anchoControles = c.maxWidth >= 1500 ? 360.0 : 320.0;
           return Row(
             children: [
-              SizedBox(width: anchoControles, child: panelControles),
+              SizedBox(
+                width: anchoControles,
+                child: Align(
+                  alignment: Alignment.topCenter,
+                  child: SingleChildScrollView(child: panelControles),
+                ),
+              ),
               const SizedBox(width: 14),
               Expanded(child: listado),
               if (mostrarDetalle) ...[
@@ -269,6 +275,7 @@ class _CursosPantallaState extends State<CursosPantalla> {
       _errorDetalleCurso = null;
       _alumnosDetalleCurso = const [];
     });
+    Proveedores.cursoAcademicoSeleccionado.value = curso;
     await _cargarDetalleCurso(curso.id);
   }
 
@@ -308,6 +315,7 @@ class _CursosPantallaState extends State<CursosPantalla> {
       _errorDetalleCurso = null;
       _alumnosDetalleCurso = const [];
     });
+    Proveedores.cursoAcademicoSeleccionado.value = null;
   }
 
   Widget _buildPanelDetalleCurso() {
@@ -317,6 +325,7 @@ class _CursosPantallaState extends State<CursosPantalla> {
     }
 
     return PanelControlesModulo(
+      scrollable: false,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -404,7 +413,7 @@ class _CursosPantallaState extends State<CursosPantalla> {
             crossAxisCount: columnas,
             crossAxisSpacing: 8,
             mainAxisSpacing: 8,
-            childAspectRatio: 1.28,
+            mainAxisExtent: 126,
           ),
           itemCount: alumnos.length,
           itemBuilder: (context, index) {
@@ -429,7 +438,7 @@ class _CursosPantallaState extends State<CursosPantalla> {
   }) {
     final cs = Theme.of(context).colorScheme;
     final detalles = <String>[
-      if (alumno.edad != null) '${alumno.edad} anos',
+      if (alumno.edad != null) '${alumno.edad} años',
       if (alumno.notaManual.trim().isNotEmpty)
         'Nota ${alumno.notaManual.trim()}',
     ];
@@ -446,7 +455,7 @@ class _CursosPantallaState extends State<CursosPantalla> {
         borderRadius: BorderRadius.circular(12),
         onTap: onTap,
         child: Container(
-          padding: const EdgeInsets.all(10),
+          padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
@@ -460,23 +469,23 @@ class _CursosPantallaState extends State<CursosPantalla> {
               Row(
                 children: [
                   Container(
-                    width: 32,
-                    height: 32,
+                    width: 30,
+                    height: 30,
                     decoration: BoxDecoration(
                       color: colorIcono.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Icon(
                       Icons.person_outline_rounded,
-                      size: 18,
+                      size: 16,
                       color: colorIcono,
                     ),
                   ),
                   const Spacer(),
                   Container(
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
+                      horizontal: 7,
+                      vertical: 3,
                     ),
                     decoration: BoxDecoration(
                       color: seleccionado
@@ -489,28 +498,30 @@ class _CursosPantallaState extends State<CursosPantalla> {
                       style: Theme.of(context).textTheme.labelSmall?.copyWith(
                         color: seleccionado ? cs.primary : cs.onSurfaceVariant,
                         fontWeight: FontWeight.w700,
+                        fontSize: 10.5,
                       ),
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 6),
               Text(
                 alumno.nombreCompleto,
-                maxLines: 2,
+                maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(
                   context,
                 ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w700),
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: 3),
               Text(
                 secundaria,
-                maxLines: 2,
+                maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: cs.onSurfaceVariant,
+                  fontSize: 11.5,
+                ),
               ),
               const Spacer(),
               Text(
@@ -520,6 +531,7 @@ class _CursosPantallaState extends State<CursosPantalla> {
                 style: Theme.of(context).textTheme.labelMedium?.copyWith(
                   color: seleccionado ? cs.primary : cs.secondary,
                   fontWeight: FontWeight.w700,
+                  fontSize: 11.5,
                 ),
               ),
             ],
@@ -760,17 +772,31 @@ class _CursosPantallaState extends State<CursosPantalla> {
   }
 
   Future<void> _gestionarInscripciones(Curso curso) async {
-    final alumnos = await Proveedores.alumnosRepositorio.listar(
-      institucionId: curso.institucionId,
-      carreraId: curso.carreraId,
-    );
+    final institucionId = curso.institucionId;
+    final carreraId = curso.carreraId;
+    if (institucionId == null || carreraId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Este curso no tiene institucion o carrera validas para gestionar inscripciones',
+          ),
+        ),
+      );
+      return;
+    }
+
+    final alumnos = await Proveedores.alumnosRepositorio
+        .listarDisponiblesParaCurso(
+          institucionId: institucionId,
+          carreraId: carreraId,
+        );
     if (!mounted) return;
 
     if (alumnos.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'No hay alumnos de esta institucion/carrera para inscribir',
+            'No hay alumnos disponibles para inscribir en este curso',
           ),
         ),
       );
@@ -886,24 +912,26 @@ class _CursosPantallaState extends State<CursosPantalla> {
       builder: (context) => StatefulBuilder(
         builder: (context, setStateDialog) => AlertDialog(
           title: const Text('Eliminar curso'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Se eliminara el curso "${curso.etiqueta}" con clases y asistencias.',
-              ),
-              const SizedBox(height: 12),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                value: eliminarAlumnos,
-                title: const Text('Eliminar alumnos asociados'),
-                subtitle: const Text(
-                  'Si se desactiva, se conservan y solo se quita el curso.',
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Se eliminara el curso "${curso.etiqueta}" con clases y asistencias.',
                 ),
-                onChanged: (v) => setStateDialog(() => eliminarAlumnos = v),
-              ),
-            ],
+                const SizedBox(height: 12),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  value: eliminarAlumnos,
+                  title: const Text('Eliminar alumnos asociados'),
+                  subtitle: const Text(
+                    'Si se desactiva, se conservan y solo se quita el curso.',
+                  ),
+                  onChanged: (v) => setStateDialog(() => eliminarAlumnos = v),
+                ),
+              ],
+            ),
           ),
           actions: [
             TextButton(
@@ -936,6 +964,8 @@ class _CursosPantallaState extends State<CursosPantalla> {
       if (!mounted) return;
       if (_cursoDetalleId == curso.id) {
         _cerrarDetalleCurso();
+      } else if (Proveedores.cursoAcademicoSeleccionado.value?.id == curso.id) {
+        Proveedores.cursoAcademicoSeleccionado.value = null;
       }
       Proveedores.notificarDatosActualizados(mensaje: msg);
       await _recargar();

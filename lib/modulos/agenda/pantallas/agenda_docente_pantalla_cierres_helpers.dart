@@ -301,7 +301,7 @@ class _DialogCierreInstitucionalState
                         width: 140,
                         child: DropdownButtonFormField<int>(
                           initialValue: _anio,
-                          decoration: const InputDecoration(labelText: 'Anio'),
+                          decoration: const InputDecoration(labelText: 'Año'),
                           items: [
                             DropdownMenuItem(
                               value: _anio - 1,
@@ -636,7 +636,7 @@ class _DialogCierreCursoState extends State<_DialogCierreCurso> {
                         width: 140,
                         child: DropdownButtonFormField<int>(
                           initialValue: _anio,
-                          decoration: const InputDecoration(labelText: 'Anio'),
+                          decoration: const InputDecoration(labelText: 'Año'),
                           items: [
                             DropdownMenuItem(
                               value: _anio - 1,

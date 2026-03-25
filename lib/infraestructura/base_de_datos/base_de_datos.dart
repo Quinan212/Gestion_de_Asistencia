@@ -13,7 +13,15 @@ import 'tablas/tabla_cursos.dart';
 import 'tablas/tabla_inscripciones.dart';
 import 'tablas/tabla_clases.dart';
 import 'tablas/tabla_asistencias.dart';
+import 'tablas/tabla_alertas_gestion_historial.dart';
+import 'tablas/tabla_alertas_gestion_estado.dart';
+import 'tablas/tabla_incidencias_transversales_historial.dart';
+import 'tablas/tabla_legajos_documentales.dart';
 import 'tablas/tabla_notas_manuales.dart';
+import 'tablas/tabla_novedades_preceptoria.dart';
+import 'tablas/tabla_responsables_gestion.dart';
+import 'tablas/tabla_recursos_biblioteca.dart';
+import 'tablas/tabla_tramites_secretaria.dart';
 
 part 'base_de_datos.g.dart';
 
@@ -27,14 +35,22 @@ part 'base_de_datos.g.dart';
     TablaInscripciones,
     TablaClases,
     TablaAsistencias,
+    TablaAlertasGestionHistorial,
+    TablaAlertasGestionEstado,
+    TablaIncidenciasTransversalesHistorial,
+    TablaLegajosDocumentales,
     TablaNotasManuales,
+    TablaNovedadesPreceptoria,
+    TablaResponsablesGestion,
+    TablaRecursosBiblioteca,
+    TablaTramitesSecretaria,
   ],
 )
 class BaseDeDatos extends _$BaseDeDatos {
   BaseDeDatos() : super(_abrirConexion());
 
   @override
-  int get schemaVersion => 31;
+  int get schemaVersion => 41;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -50,9 +66,18 @@ class BaseDeDatos extends _$BaseDeDatos {
       await _crearTablaReglasInstitucionSiFalta();
       await _normalizarCatalogoMateriasSiHaceFalta();
       await _agregarCamposBitacoraClaseSiFaltan();
+      await _agregarCamposHorarioClaseSiFaltan();
       await _crearTablaPerfilEstableCursoSiFalta();
       await _crearTablaRubricasSimplesSiFalta();
       await _crearTablaAuditoriaDocenteSiFalta();
+      await _crearTablaAlertasGestionHistorialSiFalta();
+      await _crearTablaAlertasGestionEstadoSiFalta();
+      await _crearTablaIncidenciasTransversalesHistorialSiFalta();
+      await _crearTablaLegajosDocumentalesSiFalta();
+      await _crearTablaResponsablesGestionSiFalta();
+      await _crearTablaNovedadesPreceptoriaSiFalta();
+      await _crearTablaRecursosBibliotecaSiFalta();
+      await _crearTablaTramitesSecretariaSiFalta();
     },
     onUpgrade: (m, from, to) async {
       Future<void> ejecutarPaso(
@@ -249,6 +274,86 @@ class BaseDeDatos extends _$BaseDeDatos {
           },
         );
       }
+      if (from < 32) {
+        await ejecutarPaso(
+          'from<32 _agregarCamposHorarioClaseSiFaltan',
+          () async {
+            await _agregarCamposHorarioClaseSiFaltan();
+          },
+        );
+      }
+      if (from < 33) {
+        await ejecutarPaso(
+          'from<33 _crearTablaLegajosDocumentalesSiFalta',
+          () async {
+            await _crearTablaLegajosDocumentalesSiFalta();
+          },
+        );
+      }
+      if (from < 34) {
+        await ejecutarPaso(
+          'from<34 _crearTablaAlertasGestionEstadoSiFalta',
+          () async {
+            await _crearTablaAlertasGestionEstadoSiFalta();
+          },
+        );
+      }
+      if (from < 35) {
+        await ejecutarPaso(
+          'from<35 _crearTablaAlertasGestionEstadoSiFalta',
+          () async {
+            await _crearTablaAlertasGestionEstadoSiFalta();
+          },
+        );
+      }
+      if (from < 36) {
+        await ejecutarPaso(
+          'from<36 _crearTablaResponsablesGestionSiFalta',
+          () async {
+            await _crearTablaResponsablesGestionSiFalta();
+          },
+        );
+      }
+      if (from < 37) {
+        await ejecutarPaso(
+          'from<37 _crearTablaAlertasGestionHistorialSiFalta',
+          () async {
+            await _crearTablaAlertasGestionHistorialSiFalta();
+          },
+        );
+      }
+      if (from < 38) {
+        await ejecutarPaso(
+          'from<38 _crearTablaTramitesSecretariaSiFalta',
+          () async {
+            await _crearTablaTramitesSecretariaSiFalta();
+          },
+        );
+      }
+      if (from < 39) {
+        await ejecutarPaso(
+          'from<39 _crearTablaRecursosBibliotecaSiFalta',
+          () async {
+            await _crearTablaRecursosBibliotecaSiFalta();
+          },
+        );
+      }
+      if (from < 40) {
+        await ejecutarPaso(
+          'from<40 _crearTablaNovedadesPreceptoriaSiFalta',
+          () async {
+            await _crearTablaNovedadesPreceptoriaSiFalta();
+          },
+        );
+      }
+      if (from < 41) {
+        await ejecutarPaso(
+          'from<41 _crearTablaIncidenciasTransversalesHistorialSiFalta',
+          () async {
+            await _crearTablaIncidenciasTransversalesHistorialSiFalta();
+          },
+        );
+      }
 
       // Sanidad final: asegura que el nucleo (catalogos + alumnos + asistencia)
       // quede operativo incluso si algun paso opcional falla en esquemas legacy.
@@ -276,9 +381,258 @@ class BaseDeDatos extends _$BaseDeDatos {
           await _agregarCamposDetalleAsistenciaSiFaltan();
         },
       );
+      await ejecutarPaso('final _agregarCamposHorarioClaseSiFaltan', () async {
+        await _agregarCamposHorarioClaseSiFaltan();
+      });
+      await ejecutarPaso(
+        'final _crearTablaAlertasGestionHistorialSiFalta',
+        () async {
+          await _crearTablaAlertasGestionHistorialSiFalta();
+        },
+      );
+      await ejecutarPaso(
+        'final _crearTablaAlertasGestionEstadoSiFalta',
+        () async {
+          await _crearTablaAlertasGestionEstadoSiFalta();
+        },
+      );
+      await ejecutarPaso(
+        'final _crearTablaIncidenciasTransversalesHistorialSiFalta',
+        () async {
+          await _crearTablaIncidenciasTransversalesHistorialSiFalta();
+        },
+      );
+      await ejecutarPaso('final _crearTablaLegajosDocumentalesSiFalta', () async {
+        await _crearTablaLegajosDocumentalesSiFalta();
+      });
+      await ejecutarPaso(
+        'final _crearTablaResponsablesGestionSiFalta',
+        () async {
+          await _crearTablaResponsablesGestionSiFalta();
+        },
+      );
+      await ejecutarPaso(
+        'final _crearTablaRecursosBibliotecaSiFalta',
+        () async {
+          await _crearTablaRecursosBibliotecaSiFalta();
+        },
+      );
+      await ejecutarPaso(
+        'final _crearTablaNovedadesPreceptoriaSiFalta',
+        () async {
+          await _crearTablaNovedadesPreceptoriaSiFalta();
+        },
+      );
+      await ejecutarPaso(
+        'final _crearTablaTramitesSecretariaSiFalta',
+        () async {
+          await _crearTablaTramitesSecretariaSiFalta();
+        },
+      );
     },
   );
   Future<void> cerrar() async => close();
+
+  Future<void> _crearTablaAlertasGestionHistorialSiFalta() async {
+    await customStatement('''
+      CREATE TABLE IF NOT EXISTS tabla_alertas_gestion_historial (
+        id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+        clave TEXT NOT NULL,
+        accion TEXT NOT NULL,
+        estado_anterior TEXT NULL,
+        estado_nuevo TEXT NOT NULL,
+        derivada_a TEXT NULL,
+        comentario TEXT NULL,
+        creado_en INTEGER NOT NULL DEFAULT (CAST(strftime('%s', CURRENT_TIMESTAMP) AS INTEGER))
+      );
+    ''');
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_alertas_gestion_historial_clave_fecha ON tabla_alertas_gestion_historial (clave, creado_en DESC)',
+    );
+  }
+
+  Future<void> _crearTablaResponsablesGestionSiFalta() async {
+    await customStatement('''
+      CREATE TABLE IF NOT EXISTS tabla_responsables_gestion (
+        id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+        nombre TEXT NOT NULL,
+        area TEXT NOT NULL,
+        rol_destino TEXT NOT NULL,
+        nivel_destino TEXT NOT NULL,
+        dependencia_destino TEXT NOT NULL,
+        activo INTEGER NOT NULL DEFAULT 1,
+        creado_en INTEGER NOT NULL DEFAULT (CAST(strftime('%s', CURRENT_TIMESTAMP) AS INTEGER))
+      );
+    ''');
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_responsables_gestion_contexto ON tabla_responsables_gestion (rol_destino, nivel_destino, dependencia_destino, activo)',
+    );
+  }
+
+  Future<void> _crearTablaAlertasGestionEstadoSiFalta() async {
+    await customStatement('''
+      CREATE TABLE IF NOT EXISTS tabla_alertas_gestion_estado (
+        id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+        clave TEXT NOT NULL UNIQUE,
+        estado TEXT NOT NULL,
+        pospuesta_hasta INTEGER NULL,
+        derivada_a TEXT NULL,
+        comentario TEXT NULL,
+        actualizado_en INTEGER NOT NULL DEFAULT (CAST(strftime('%s', CURRENT_TIMESTAMP) AS INTEGER))
+      );
+    ''');
+    if (!await _existeColumna('tabla_alertas_gestion_estado', 'derivada_a')) {
+      await customStatement(
+        'ALTER TABLE tabla_alertas_gestion_estado ADD COLUMN derivada_a TEXT NULL',
+      );
+    }
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_alertas_gestion_estado_clave ON tabla_alertas_gestion_estado (clave, estado)',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_alertas_gestion_estado_pospuesta ON tabla_alertas_gestion_estado (pospuesta_hasta)',
+    );
+  }
+
+  Future<void> _crearTablaIncidenciasTransversalesHistorialSiFalta() async {
+    await customStatement('''
+      CREATE TABLE IF NOT EXISTS tabla_incidencias_transversales_historial (
+        id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+        origen TEXT NOT NULL,
+        referencia TEXT NOT NULL,
+        accion TEXT NOT NULL,
+        estado_operativo TEXT NULL,
+        estado_documental TEXT NULL,
+        detalle TEXT NULL,
+        creado_en INTEGER NOT NULL DEFAULT (CAST(strftime('%s', CURRENT_TIMESTAMP) AS INTEGER))
+      );
+    ''');
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_incidencias_transversales_historial_caso_fecha ON tabla_incidencias_transversales_historial (origen, referencia, creado_en DESC)',
+    );
+  }
+
+  Future<void> _crearTablaLegajosDocumentalesSiFalta() async {
+    await customStatement('''
+      CREATE TABLE IF NOT EXISTS tabla_legajos_documentales (
+        id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+        tipo_registro TEXT NOT NULL,
+        categoria TEXT NOT NULL,
+        codigo TEXT NOT NULL,
+        titulo TEXT NOT NULL,
+        detalle TEXT NOT NULL DEFAULT '',
+        responsable TEXT NOT NULL,
+        estado TEXT NOT NULL,
+        severidad TEXT NOT NULL DEFAULT 'Media',
+        rol_destino TEXT NOT NULL,
+        nivel_destino TEXT NOT NULL,
+        dependencia_destino TEXT NOT NULL,
+        horas_hasta_vencimiento INTEGER NULL,
+        activo INTEGER NOT NULL DEFAULT 1,
+        creado_en INTEGER NOT NULL DEFAULT (CAST(strftime('%s', CURRENT_TIMESTAMP) AS INTEGER)),
+        actualizado_en INTEGER NOT NULL DEFAULT (CAST(strftime('%s', CURRENT_TIMESTAMP) AS INTEGER))
+      );
+    ''');
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_legajos_destino ON tabla_legajos_documentales (rol_destino, nivel_destino, dependencia_destino, tipo_registro)',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_legajos_categoria_estado ON tabla_legajos_documentales (categoria, estado, severidad)',
+    );
+  }
+
+  Future<void> _crearTablaTramitesSecretariaSiFalta() async {
+    await customStatement('''
+      CREATE TABLE IF NOT EXISTS tabla_tramites_secretaria (
+        id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+        tipo_tramite TEXT NOT NULL,
+        categoria TEXT NOT NULL,
+        codigo TEXT NOT NULL,
+        asunto TEXT NOT NULL,
+        solicitante TEXT NOT NULL,
+        curso_referencia TEXT NULL,
+        estado TEXT NOT NULL,
+        prioridad TEXT NOT NULL DEFAULT 'Media',
+        responsable TEXT NOT NULL,
+        observaciones TEXT NOT NULL DEFAULT '',
+        fecha_limite INTEGER NULL,
+        rol_destino TEXT NOT NULL,
+        nivel_destino TEXT NOT NULL,
+        dependencia_destino TEXT NOT NULL,
+        activo INTEGER NOT NULL DEFAULT 1,
+        creado_en INTEGER NOT NULL DEFAULT (CAST(strftime('%s', CURRENT_TIMESTAMP) AS INTEGER)),
+        actualizado_en INTEGER NOT NULL DEFAULT (CAST(strftime('%s', CURRENT_TIMESTAMP) AS INTEGER))
+      );
+    ''');
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_tramites_secretaria_contexto ON tabla_tramites_secretaria (rol_destino, nivel_destino, dependencia_destino, categoria, activo)',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_tramites_secretaria_estado ON tabla_tramites_secretaria (tipo_tramite, estado, prioridad)',
+    );
+  }
+
+  Future<void> _crearTablaRecursosBibliotecaSiFalta() async {
+    await customStatement('''
+      CREATE TABLE IF NOT EXISTS tabla_recursos_biblioteca (
+        id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+        tipo_recurso TEXT NOT NULL,
+        categoria TEXT NOT NULL,
+        codigo TEXT NOT NULL,
+        titulo TEXT NOT NULL,
+        autor_referencia TEXT NULL,
+        estado TEXT NOT NULL,
+        responsable TEXT NOT NULL,
+        destinatario TEXT NULL,
+        curso_referencia TEXT NULL,
+        cantidad_total INTEGER NOT NULL DEFAULT 1,
+        cantidad_disponible INTEGER NOT NULL DEFAULT 1,
+        fecha_vencimiento INTEGER NULL,
+        observaciones TEXT NOT NULL DEFAULT '',
+        rol_destino TEXT NOT NULL,
+        nivel_destino TEXT NOT NULL,
+        dependencia_destino TEXT NOT NULL,
+        activo INTEGER NOT NULL DEFAULT 1,
+        creado_en INTEGER NOT NULL DEFAULT (CAST(strftime('%s', CURRENT_TIMESTAMP) AS INTEGER)),
+        actualizado_en INTEGER NOT NULL DEFAULT (CAST(strftime('%s', CURRENT_TIMESTAMP) AS INTEGER))
+      );
+    ''');
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_recursos_biblioteca_contexto ON tabla_recursos_biblioteca (rol_destino, nivel_destino, dependencia_destino, categoria, activo)',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_recursos_biblioteca_estado ON tabla_recursos_biblioteca (estado, tipo_recurso, fecha_vencimiento)',
+    );
+  }
+
+  Future<void> _crearTablaNovedadesPreceptoriaSiFalta() async {
+    await customStatement('''
+      CREATE TABLE IF NOT EXISTS tabla_novedades_preceptoria (
+        id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+        tipo_novedad TEXT NOT NULL,
+        categoria TEXT NOT NULL,
+        curso_referencia TEXT NULL,
+        alumno_referencia TEXT NULL,
+        estado TEXT NOT NULL,
+        prioridad TEXT NOT NULL DEFAULT 'Media',
+        responsable TEXT NOT NULL,
+        observaciones TEXT NOT NULL DEFAULT '',
+        fecha_seguimiento INTEGER NULL,
+        rol_destino TEXT NOT NULL,
+        nivel_destino TEXT NOT NULL,
+        dependencia_destino TEXT NOT NULL,
+        activo INTEGER NOT NULL DEFAULT 1,
+        creado_en INTEGER NOT NULL DEFAULT (CAST(strftime('%s', CURRENT_TIMESTAMP) AS INTEGER)),
+        actualizado_en INTEGER NOT NULL DEFAULT (CAST(strftime('%s', CURRENT_TIMESTAMP) AS INTEGER))
+      );
+    ''');
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_novedades_preceptoria_contexto ON tabla_novedades_preceptoria (rol_destino, nivel_destino, dependencia_destino, categoria, activo)',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_novedades_preceptoria_estado ON tabla_novedades_preceptoria (estado, prioridad, fecha_seguimiento)',
+    );
+  }
 
   Future<void> _normalizarCatalogoMateriasSiHaceFalta() async {
     try {
@@ -1070,6 +1424,24 @@ class BaseDeDatos extends _$BaseDeDatos {
     if (!await _existeColumna('tabla_clases', 'resultado_actividad')) {
       await customStatement(
         'ALTER TABLE tabla_clases ADD COLUMN resultado_actividad TEXT NULL',
+      );
+    }
+  }
+
+  Future<void> _agregarCamposHorarioClaseSiFaltan() async {
+    if (!await _existeColumna('tabla_clases', 'hora_inicio')) {
+      await customStatement(
+        'ALTER TABLE tabla_clases ADD COLUMN hora_inicio TEXT NULL',
+      );
+    }
+    if (!await _existeColumna('tabla_clases', 'hora_fin')) {
+      await customStatement(
+        'ALTER TABLE tabla_clases ADD COLUMN hora_fin TEXT NULL',
+      );
+    }
+    if (!await _existeColumna('tabla_clases', 'aula')) {
+      await customStatement(
+        'ALTER TABLE tabla_clases ADD COLUMN aula TEXT NULL',
       );
     }
   }

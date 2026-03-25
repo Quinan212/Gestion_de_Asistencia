@@ -352,7 +352,7 @@ Bitacora de clase:
                         width: 140,
                         child: DropdownButtonFormField<int>(
                           initialValue: _anio,
-                          decoration: const InputDecoration(labelText: 'Anio'),
+                          decoration: const InputDecoration(labelText: 'Año'),
                           items: [
                             DropdownMenuItem(
                               value: _anio - 1,
@@ -691,7 +691,7 @@ Promedio: $prom
                         width: 140,
                         child: DropdownButtonFormField<int>(
                           initialValue: _anio,
-                          decoration: const InputDecoration(labelText: 'Anio'),
+                          decoration: const InputDecoration(labelText: 'Año'),
                           items: [
                             DropdownMenuItem(
                               value: _anio - 1,

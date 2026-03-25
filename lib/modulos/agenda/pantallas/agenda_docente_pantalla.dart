@@ -135,6 +135,783 @@ String _descripcionFuncionAgenda(String clave) {
   }
 }
 
+Future<bool> agendaAbrirHorariosCurso(
+  BuildContext context,
+  AgendaDocenteItem item,
+) async {
+  final actuales = await Proveedores.agendaDocenteRepositorio
+      .listarHorariosCurso(item.cursoId);
+  if (!context.mounted) return false;
+
+  final cambios = await _mostrarDialogoHorarios(
+    context,
+    '${item.materia} (${item.etiquetaCurso})',
+    actuales,
+  );
+  if (cambios == null) return false;
+
+  await Proveedores.agendaDocenteRepositorio.guardarHorariosCurso(
+    cursoId: item.cursoId,
+    horarios: cambios,
+  );
+  Proveedores.notificarDatosActualizados(
+    mensaje: 'Horarios actualizados para ${item.materia}',
+  );
+  return true;
+}
+
+Future<bool> agendaAbrirIntervencionesCurso(
+  BuildContext context,
+  AgendaDocenteItem item,
+) async {
+  final huboCambios = await _mostrarDialogoIntervenciones(
+    context,
+    item.cursoId,
+    '${item.materia} (${item.etiquetaCurso})',
+    item.institucion,
+  );
+  if (huboCambios == true) {
+    Proveedores.notificarDatosActualizados(
+      mensaje: 'Intervenciones docentes actualizadas',
+    );
+    return true;
+  }
+  return false;
+}
+
+Future<bool> agendaAbrirHistorialCurso(
+  BuildContext context,
+  AgendaDocenteItem item, {
+  required DateTime fechaReferencia,
+}) async {
+  final huboCambios = await showDialog<bool>(
+    context: context,
+    builder: (context) => _DialogHistorialAlumnos(
+      cursoId: item.cursoId,
+      tituloCurso: '${item.materia} (${item.etiquetaCurso})',
+      fechaReferencia: fechaReferencia,
+    ),
+  );
+  return huboCambios == true;
+}
+
+Future<bool> agendaAbrirEvaluacionesCurso(
+  BuildContext context,
+  AgendaDocenteItem item,
+) async {
+  final huboCambios = await showDialog<bool>(
+    context: context,
+    builder: (context) => _DialogEvaluacionesCurso(
+      cursoId: item.cursoId,
+      tituloCurso: '${item.materia} (${item.etiquetaCurso})',
+      institucion: item.institucion,
+    ),
+  );
+  if (huboCambios == true) {
+    Proveedores.notificarDatosActualizados(
+      mensaje: 'Evaluaciones actualizadas',
+    );
+    return true;
+  }
+  return false;
+}
+
+Future<bool> agendaAbrirEvidenciasCurso(
+  BuildContext context,
+  AgendaDocenteItem item, {
+  required DateTime fechaReferencia,
+}) async {
+  final huboCambios = await showDialog<bool>(
+    context: context,
+    builder: (context) => _DialogEvidenciasCurso(
+      cursoId: item.cursoId,
+      institucion: item.institucion,
+      tituloCurso: '${item.materia} (${item.etiquetaCurso})',
+      fechaReferencia: fechaReferencia,
+    ),
+  );
+  if (huboCambios == true) {
+    Proveedores.notificarDatosActualizados(mensaje: 'Evidencias actualizadas');
+    return true;
+  }
+  return false;
+}
+
+Future<bool> agendaAbrirFichaCurso(
+  BuildContext context,
+  AgendaDocenteItem item,
+) async {
+  final huboCambios = await showDialog<bool>(
+    context: context,
+    builder: (context) => _DialogFichaPedagogica(
+      cursoId: item.cursoId,
+      tituloCurso: '${item.materia} (${item.etiquetaCurso})',
+    ),
+  );
+  if (huboCambios == true) {
+    Proveedores.notificarDatosActualizados(
+      mensaje: 'Ficha pedagogica actualizada',
+    );
+    return true;
+  }
+  return false;
+}
+
+Future<bool> agendaAbrirAcuerdosCurso(
+  BuildContext context,
+  AgendaDocenteItem item,
+) async {
+  final huboCambios = await showDialog<bool>(
+    context: context,
+    builder: (context) => _DialogAcuerdosConvivencia(
+      cursoId: item.cursoId,
+      tituloCurso: '${item.materia} (${item.etiquetaCurso})',
+      institucion: item.institucion,
+    ),
+  );
+  if (huboCambios == true) {
+    Proveedores.notificarDatosActualizados(
+      mensaje: 'Acuerdos de convivencia actualizados',
+    );
+    return true;
+  }
+  return false;
+}
+
+Future<bool> agendaAbrirReglasInstitucion(
+  BuildContext context,
+  AgendaDocenteItem item,
+) async {
+  final huboCambios = await showDialog<bool>(
+    context: context,
+    builder: (context) =>
+        _DialogReglasInstitucion(institucion: item.institucion),
+  );
+  if (huboCambios == true) {
+    Proveedores.notificarDatosActualizados(
+      mensaje: 'Reglas institucionales actualizadas',
+    );
+    return true;
+  }
+  return false;
+}
+
+Future<bool> agendaAbrirAgrupamientoCurso(
+  BuildContext context,
+  AgendaDocenteItem item,
+) async {
+  await showDialog<void>(
+    context: context,
+    builder: (context) => _DialogAgrupamientoCurso(
+      cursoId: item.cursoId,
+      tituloCurso: '${item.materia} (${item.etiquetaCurso})',
+    ),
+  );
+  return false;
+}
+
+Future<bool> agendaAbrirPlantillasCurso(
+  BuildContext context,
+  AgendaDocenteItem item,
+) async {
+  final huboCambios = await showDialog<bool>(
+    context: context,
+    builder: (context) => _DialogPlantillasCurso(
+      cursoId: item.cursoId,
+      institucion: item.institucion,
+      tituloCurso: '${item.materia} (${item.etiquetaCurso})',
+    ),
+  );
+  if (huboCambios == true) {
+    Proveedores.notificarDatosActualizados(mensaje: 'Plantillas actualizadas');
+    return true;
+  }
+  return false;
+}
+
+Future<bool> agendaAbrirRubricasCurso(
+  BuildContext context,
+  AgendaDocenteItem item,
+) async {
+  final huboCambios = await showDialog<bool>(
+    context: context,
+    builder: (context) => _DialogRubricasCurso(
+      cursoId: item.cursoId,
+      institucion: item.institucion,
+      tituloCurso: '${item.materia} (${item.etiquetaCurso})',
+    ),
+  );
+  if (huboCambios == true) {
+    Proveedores.notificarDatosActualizados(mensaje: 'Rubricas actualizadas');
+    return true;
+  }
+  return false;
+}
+
+Future<bool> agendaAbrirClaseActualCurso(
+  BuildContext context,
+  AgendaDocenteItem item, {
+  required DateTime fechaReferencia,
+}) async {
+  final huboCambios = await showDialog<bool>(
+    context: context,
+    builder: (context) => _DialogClaseActualRapida(
+      cursoId: item.cursoId,
+      tituloCurso: '${item.materia} (${item.etiquetaCurso})',
+      fecha: fechaReferencia,
+    ),
+  );
+  if (huboCambios == true) {
+    Proveedores.notificarDatosActualizados(mensaje: 'Clase actual actualizada');
+    return true;
+  }
+  return false;
+}
+
+Future<bool> agendaAbrirPerfilEstableCurso(
+  BuildContext context,
+  AgendaDocenteItem item,
+) async {
+  final huboCambios = await showDialog<bool>(
+    context: context,
+    builder: (context) => _DialogPerfilEstableCurso(
+      cursoId: item.cursoId,
+      tituloCurso: '${item.materia} (${item.etiquetaCurso})',
+    ),
+  );
+  if (huboCambios == true) {
+    Proveedores.notificarDatosActualizados(
+      mensaje: 'Perfil estable del curso actualizado',
+    );
+    return true;
+  }
+  return false;
+}
+
+Future<bool> agendaAbrirCierreCurso(
+  BuildContext context,
+  AgendaDocenteItem item, {
+  required DateTime fechaReferencia,
+}) async {
+  final resumen = await showDialog<ResumenCierreCurso>(
+    context: context,
+    builder: (context) => _DialogCierreCurso(
+      cursoId: item.cursoId,
+      cursoEtiqueta: '${item.materia} (${item.etiquetaCurso})',
+      fechaReferencia: fechaReferencia,
+    ),
+  );
+  if (resumen == null) return false;
+  final texto = resumen.generarTexto('${item.materia} (${item.etiquetaCurso})');
+  await Clipboard.setData(ClipboardData(text: texto));
+  if (!context.mounted) return false;
+  ScaffoldMessenger.of(context).showSnackBar(
+    const SnackBar(content: Text('Resumen de cierre copiado al portapapeles')),
+  );
+  return false;
+}
+
+Future<bool> agendaAbrirSintesisPeriodoCurso(
+  BuildContext context,
+  AgendaDocenteItem item, {
+  required DateTime fechaReferencia,
+}) async {
+  await showDialog<void>(
+    context: context,
+    builder: (context) => _DialogSintesisPeriodoCurso(
+      cursoId: item.cursoId,
+      cursoEtiqueta: '${item.materia} (${item.etiquetaCurso})',
+      fechaReferencia: fechaReferencia,
+    ),
+  );
+  return false;
+}
+
+Future<bool> agendaAbrirPendientesAccionables(
+  BuildContext context, {
+  required DateTime fechaReferencia,
+}) async {
+  final abierto = await showDialog<bool>(
+    context: context,
+    builder: (context) =>
+        _DialogPendientesAccionables(fechaReferencia: fechaReferencia),
+  );
+  return abierto == true;
+}
+
+Future<bool> agendaAbrirCursoActualOProximo(
+  BuildContext context, {
+  required DateTime fechaReferencia,
+}) async {
+  final agenda = await Proveedores.agendaDocenteRepositorio.listarAgendaDia(
+    fechaReferencia,
+  );
+  if (!context.mounted) return false;
+  if (agenda.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('No hay cursos disponibles hoy')),
+    );
+    return false;
+  }
+
+  final ahora = DateTime.now();
+  final referencia = _esMismoDia(fechaReferencia, _soloFecha(ahora))
+      ? ahora
+      : DateTime(
+          fechaReferencia.year,
+          fechaReferencia.month,
+          fechaReferencia.day,
+          12,
+          0,
+        );
+
+  _CandidatoCursoRapido? actual;
+  _CandidatoCursoRapido? proximo;
+
+  for (final item in agenda) {
+    final bloques = item.bloquesHorarios
+        .map(_parsearBloqueHorarioMenu)
+        .whereType<_BloqueHorarioParseado>()
+        .toList(growable: false);
+    for (final b in bloques) {
+      final inicio = DateTime(
+        fechaReferencia.year,
+        fechaReferencia.month,
+        fechaReferencia.day,
+        b.horaInicio,
+        b.minutoInicio,
+      );
+      final fin =
+          DateTime(
+            fechaReferencia.year,
+            fechaReferencia.month,
+            fechaReferencia.day,
+            b.horaFin ?? b.horaInicio,
+            b.minutoFin ?? (b.minutoInicio + 50) % 60,
+          ).add(
+            b.horaFin == null && b.minutoInicio + 50 >= 60
+                ? const Duration(hours: 1)
+                : Duration.zero,
+          );
+
+      if (!referencia.isBefore(inicio) && !referencia.isAfter(fin)) {
+        final cand = _CandidatoCursoRapido(
+          item: item,
+          inicio: inicio,
+          fin: fin,
+        );
+        if (actual == null || cand.inicio.isBefore(actual.inicio)) {
+          actual = cand;
+        }
+      } else if (inicio.isAfter(referencia)) {
+        final cand = _CandidatoCursoRapido(
+          item: item,
+          inicio: inicio,
+          fin: fin,
+        );
+        if (proximo == null || cand.inicio.isBefore(proximo.inicio)) {
+          proximo = cand;
+        }
+      }
+    }
+  }
+
+  final elegido = actual ?? proximo;
+  final item = elegido?.item ?? agenda.first;
+  final huboCambios = await agendaAbrirClaseActualCurso(
+    context,
+    item,
+    fechaReferencia: fechaReferencia,
+  );
+  if (!context.mounted) return huboCambios;
+  final etiqueta = actual != null
+      ? 'Curso en curso'
+      : (proximo != null ? 'Proximo curso' : 'Curso sugerido');
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Text('$etiqueta: ${item.materia} (${item.etiquetaCurso})'),
+    ),
+  );
+  return huboCambios;
+}
+
+Future<bool> agendaAbrirAlertasAutomaticas(
+  BuildContext context, {
+  required DateTime fechaReferencia,
+}) async {
+  final alertas = await Proveedores.agendaDocenteRepositorio
+      .listarAlertasAutomaticas(fechaReferencia);
+  if (!context.mounted) return false;
+  await showDialog<void>(
+    context: context,
+    builder: (context) => _DialogAlertasAutomaticas(
+      fechaReferencia: fechaReferencia,
+      alertas: alertas,
+    ),
+  );
+  return false;
+}
+
+Future<bool> agendaAbrirAutomatizacionesDocentes(
+  BuildContext context, {
+  required DateTime fechaReferencia,
+}) async {
+  final agenda = await Proveedores.agendaDocenteRepositorio.listarAgendaDia(
+    fechaReferencia,
+  );
+  final alertas = await Proveedores.agendaDocenteRepositorio
+      .listarAlertasAutomaticas(fechaReferencia);
+  if (!context.mounted) return false;
+  await showDialog<void>(
+    context: context,
+    builder: (context) => _DialogAutomatizacionesDocentes(
+      fechaReferencia: fechaReferencia,
+      sugerencias: _generarAutomatizacionesMenu(
+        agenda: agenda,
+        alertas: alertas,
+        fechaReferencia: fechaReferencia,
+      ),
+    ),
+  );
+  return false;
+}
+
+Future<bool> agendaAbrirCierreInstitucional(
+  BuildContext context, {
+  required DateTime fechaReferencia,
+  String? institucionSugerida,
+}) async {
+  final huboCambios = await showDialog<bool>(
+    context: context,
+    builder: (context) => _DialogCierreInstitucional(
+      fechaReferencia: fechaReferencia,
+      institucionSugerida: institucionSugerida,
+    ),
+  );
+  if (huboCambios == true) {
+    Proveedores.notificarDatosActualizados(
+      mensaje: 'Cierre institucional actualizado',
+    );
+    return true;
+  }
+  return false;
+}
+
+Future<bool> agendaAbrirDashboardEjecutivo(
+  BuildContext context, {
+  required DateTime fechaReferencia,
+}) async {
+  await showDialog<void>(
+    context: context,
+    builder: (context) =>
+        _DialogDashboardEjecutivo(fechaReferencia: fechaReferencia),
+  );
+  return false;
+}
+
+Future<bool> agendaAbrirAuditoriaDocente(
+  BuildContext context, {
+  required DateTime fechaReferencia,
+}) async {
+  final agenda = await Proveedores.agendaDocenteRepositorio.listarAgendaDia(
+    fechaReferencia,
+  );
+  if (!context.mounted) return false;
+  await showDialog<void>(
+    context: context,
+    builder: (context) => _DialogAuditoriaDocente(
+      fechaReferencia: fechaReferencia,
+      agenda: agenda,
+    ),
+  );
+  return false;
+}
+
+_BloqueHorarioParseado? _parsearBloqueHorarioMenu(String texto) {
+  final base = texto.split('(').first.trim();
+  if (base.isEmpty) return null;
+  final m = RegExp(
+    r'([01]\d|2[0-3]):([0-5]\d)(?:\s*-\s*([01]\d|2[0-3]):([0-5]\d))?',
+  ).firstMatch(base);
+  if (m == null) return null;
+  final hi = int.tryParse(m.group(1)!);
+  final mi = int.tryParse(m.group(2)!);
+  final hf = m.group(3) == null ? null : int.tryParse(m.group(3)!);
+  final mf = m.group(4) == null ? null : int.tryParse(m.group(4)!);
+  if (hi == null || mi == null) return null;
+  return _BloqueHorarioParseado(
+    horaInicio: hi,
+    minutoInicio: mi,
+    horaFin: hf,
+    minutoFin: mf,
+  );
+}
+
+int _puntajeRiesgoCursoMenu(
+  AgendaDocenteItem item,
+  List<AlertaAutomaticaDocente> alertas,
+) {
+  var puntaje = 0;
+  if (item.alumnosPendientes >= 6) {
+    puntaje += 2;
+  } else if (item.alumnosPendientes >= 3) {
+    puntaje += 1;
+  }
+  if (item.actividadesSinEntregar >= 8) {
+    puntaje += 2;
+  } else if (item.actividadesSinEntregar >= 4) {
+    puntaje += 1;
+  }
+  if (item.trabajosSinCorregir >= 10) {
+    puntaje += 2;
+  } else if (item.trabajosSinCorregir >= 5) {
+    puntaje += 1;
+  }
+  final alertasAltas = alertas
+      .where((a) => a.cursoId == item.cursoId && a.severidad == 'alta')
+      .length;
+  final alertasMedias = alertas
+      .where((a) => a.cursoId == item.cursoId && a.severidad == 'media')
+      .length;
+  puntaje += (alertasAltas * 2) + alertasMedias;
+  return puntaje;
+}
+
+String _nivelRiesgoCursoMenu(
+  AgendaDocenteItem item,
+  List<AlertaAutomaticaDocente> alertas,
+) {
+  final puntaje = _puntajeRiesgoCursoMenu(item, alertas);
+  if (puntaje >= 6) return 'alto';
+  if (puntaje >= 3) return 'medio';
+  return 'bajo';
+}
+
+List<_SugerenciaMenuAutomatica> _generarAutomatizacionesMenu({
+  required List<AgendaDocenteItem> agenda,
+  required List<AlertaAutomaticaDocente> alertas,
+  required DateTime fechaReferencia,
+}) {
+  final out = <_SugerenciaMenuAutomatica>[];
+  final altas = alertas.where((a) => a.severidad == 'alta').length;
+  final hoySinAsistencia = agenda
+      .where((x) => x.tieneClaseHoy && !x.asistenciaInicializada)
+      .toList(growable: false);
+  final riesgoAlto = agenda
+      .where((x) => _nivelRiesgoCursoMenu(x, alertas) == 'alto')
+      .toList(growable: false);
+  final conCorrecciones = agenda
+      .where((x) => x.trabajosSinCorregir >= 8)
+      .toList(growable: false);
+  final proximasEval = agenda
+      .where((x) {
+        final fecha = x.proximaEvaluacionFecha;
+        if (fecha == null) return false;
+        final delta = _soloFecha(
+          fecha,
+        ).difference(_soloFecha(fechaReferencia)).inDays;
+        return delta >= 0 && delta <= 3;
+      })
+      .toList(growable: false);
+
+  if (hoySinAsistencia.isNotEmpty) {
+    final curso = hoySinAsistencia.first;
+    out.add(
+      _SugerenciaMenuAutomatica(
+        icono: Icons.fact_check_outlined,
+        titulo: 'Completar asistencia de clase actual',
+        detalle:
+            '${curso.materia} (${curso.etiquetaCurso}) tiene clase hoy sin planilla inicializada.',
+      ),
+    );
+  }
+
+  if (riesgoAlto.isNotEmpty) {
+    final curso = riesgoAlto.first;
+    out.add(
+      _SugerenciaMenuAutomatica(
+        icono: Icons.priority_high_outlined,
+        titulo: 'Priorizar seguimiento de riesgo alto',
+        detalle:
+            '${riesgoAlto.length} curso(s) en riesgo alto. Empezar por ${curso.materia} (${curso.etiquetaCurso}).',
+      ),
+    );
+  }
+
+  if (conCorrecciones.isNotEmpty) {
+    final curso = conCorrecciones.first;
+    out.add(
+      _SugerenciaMenuAutomatica(
+        icono: Icons.rule_folder_outlined,
+        titulo: 'Cerrar evaluaciones o correcciones pendientes',
+        detalle:
+            '${curso.materia} (${curso.etiquetaCurso}) acumula ${curso.trabajosSinCorregir} trabajos sin corregir.',
+      ),
+    );
+  }
+
+  if (proximasEval.isNotEmpty) {
+    final curso = proximasEval.first;
+    final fecha = curso.proximaEvaluacionFecha!;
+    out.add(
+      _SugerenciaMenuAutomatica(
+        icono: Icons.event_available_outlined,
+        titulo: 'Preparar evaluacion proxima',
+        detalle:
+            '${curso.materia} (${curso.etiquetaCurso}) tiene evaluacion el ${_fechaCorta(fecha)}.',
+      ),
+    );
+  }
+
+  if (altas >= 3) {
+    out.add(
+      _SugerenciaMenuAutomatica(
+        icono: Icons.warning_amber_outlined,
+        titulo: 'Revisar alertas altas',
+        detalle:
+            'Hay $altas alertas de severidad alta. Conviene revisar pendientes y seguimiento.',
+      ),
+    );
+  }
+
+  return out.take(5).toList(growable: false);
+}
+
+class _DialogAlertasAutomaticas extends StatelessWidget {
+  final DateTime fechaReferencia;
+  final List<AlertaAutomaticaDocente> alertas;
+
+  const _DialogAlertasAutomaticas({
+    required this.fechaReferencia,
+    required this.alertas,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final altas = alertas.where((a) => a.severidad == 'alta').length;
+    final medias = alertas.where((a) => a.severidad == 'media').length;
+    final bajas = alertas.where((a) => a.severidad == 'baja').length;
+
+    return AlertDialog(
+      title: Text('Alertas automaticas - ${_fechaLarga(fechaReferencia)}'),
+      content: SizedBox(
+        width: _anchoDialogo(context, 860),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                Chip(label: Text('Total ${alertas.length}')),
+                Chip(label: Text('Altas $altas')),
+                Chip(label: Text('Medias $medias')),
+                Chip(label: Text('Bajas $bajas')),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Flexible(
+              child: alertas.isEmpty
+                  ? const Center(child: Text('No hay alertas activas.'))
+                  : ListView.separated(
+                      shrinkWrap: true,
+                      itemCount: alertas.length,
+                      separatorBuilder: (_, _) => const Divider(height: 1),
+                      itemBuilder: (context, index) {
+                        final alerta = alertas[index];
+                        final curso = [alerta.materia, alerta.etiquetaCurso]
+                            .whereType<String>()
+                            .where((x) => x.trim().isNotEmpty)
+                            .join(' | ');
+                        return ListTile(
+                          dense: true,
+                          contentPadding: EdgeInsets.zero,
+                          leading: Icon(
+                            alerta.severidad == 'alta'
+                                ? Icons.warning_rounded
+                                : alerta.severidad == 'media'
+                                ? Icons.info_rounded
+                                : Icons.notifications_none_rounded,
+                          ),
+                          title: Text(alerta.mensaje),
+                          subtitle: Text(
+                            curso.isEmpty
+                                ? (alerta.institucion ?? 'Sin referencia')
+                                : curso,
+                          ),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cerrar'),
+        ),
+      ],
+    );
+  }
+}
+
+class _DialogAutomatizacionesDocentes extends StatelessWidget {
+  final DateTime fechaReferencia;
+  final List<_SugerenciaMenuAutomatica> sugerencias;
+
+  const _DialogAutomatizacionesDocentes({
+    required this.fechaReferencia,
+    required this.sugerencias,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text('Automatizaciones - ${_fechaLarga(fechaReferencia)}'),
+      content: SizedBox(
+        width: _anchoDialogo(context, 820),
+        child: sugerencias.isEmpty
+            ? const Text('No hay sugerencias automaticas para este momento.')
+            : ListView.separated(
+                shrinkWrap: true,
+                itemCount: sugerencias.length,
+                separatorBuilder: (_, _) => const Divider(height: 1),
+                itemBuilder: (context, index) {
+                  final sugerencia = sugerencias[index];
+                  return ListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(sugerencia.icono),
+                    title: Text(sugerencia.titulo),
+                    subtitle: Text(sugerencia.detalle),
+                  );
+                },
+              ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cerrar'),
+        ),
+      ],
+    );
+  }
+}
+
+class _SugerenciaMenuAutomatica {
+  final IconData icono;
+  final String titulo;
+  final String detalle;
+
+  const _SugerenciaMenuAutomatica({
+    required this.icono,
+    required this.titulo,
+    required this.detalle,
+  });
+}
+
 Widget _bloqueDescripcionFuncion(
   BuildContext context,
   String clave, {
@@ -303,11 +1080,15 @@ class _AgendaDocentePantallaState extends State<AgendaDocentePantalla> {
           item.continuarHoy.trim().toLowerCase() == 'sin tema previo registrado'
           ? null
           : item.continuarHoy;
+      final horariosDelDia = await Proveedores.asistenciasRepositorio
+          .listarHorariosCursoParaFecha(cursoId: item.cursoId, fecha: _fecha);
+      final horarioClase = horariosDelDia.isEmpty ? null : horariosDelDia.first;
 
       final claseId = await Proveedores.asistenciasRepositorio.crearClase(
         cursoId: item.cursoId,
         fecha: _fecha,
         tema: temaInicial,
+        horario: horarioClase,
       );
 
       if (inscriptos > 0) {
@@ -1303,140 +2084,155 @@ class _AgendaDocentePantallaState extends State<AgendaDocentePantalla> {
 
     return Padding(
       padding: LayoutApp.kPagePadding,
-      child: Column(
-        children: [
-          if (_sincronizando) const LinearProgressIndicator(minHeight: 2),
-          PanelControlesModulo(
-            child: Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              crossAxisAlignment: WrapCrossAlignment.center,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final ancho = constraints.maxWidth;
+          final tresColumnas = ancho >= 1500;
+          final dosColumnas = !tresColumnas && ancho >= 1120;
+
+          Widget contenido;
+          if (tresColumnas) {
+            contenido = Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Agenda docente - ${_fechaLarga(_fecha)}',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 560),
-                  child: _bloqueDescripcionFuncion(
-                    context,
-                    'agenda',
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 8,
-                    ),
+                SizedBox(
+                  width: 330,
+                  child: Column(
+                    children: [
+                      _panelResumenInicio(),
+                      const SizedBox(height: 10),
+                      _panelSugerenciasAutomaticas(),
+                      const SizedBox(height: 10),
+                      _panelAccionesRapidas(),
+                    ],
                   ),
                 ),
-                IconButton(
-                  onPressed: () => _cambiarDia(-1),
-                  icon: const Icon(Icons.chevron_left),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    children: [
+                      _panelFiltrosAgenda(),
+                      const SizedBox(height: 10),
+                      _listaCursos(expandidoCompleto: true),
+                    ],
+                  ),
                 ),
-                TextButton(onPressed: _irAHoy, child: const Text('Hoy')),
-                IconButton(
-                  onPressed: () => _cambiarDia(1),
-                  icon: const Icon(Icons.chevron_right),
-                ),
-                OutlinedButton.icon(
-                  onPressed: _abrirCursoActualOProximo,
-                  icon: const Icon(Icons.near_me_outlined),
-                  label: const Text('Curso actual'),
-                ),
-                IconButton(
-                  onPressed: _cargarAgenda,
-                  icon: const Icon(Icons.refresh),
+                const SizedBox(width: 10),
+                SizedBox(
+                  width: 360,
+                  child: _panelAlertas(expandidoCompleto: true),
                 ),
               ],
-            ),
-          ),
-          const SizedBox(height: 10),
-          Expanded(
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final ancho = constraints.maxWidth;
-                final tresColumnas = ancho >= 1500;
-                final dosColumnas = !tresColumnas && ancho >= 1120;
-
-                if (tresColumnas) {
-                  return Row(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
+            );
+          } else if (dosColumnas) {
+            contenido = Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
                     children: [
-                      SizedBox(
-                        width: 330,
-                        child: ListView(
-                          children: [
-                            _panelResumenInicio(),
-                            const SizedBox(height: 10),
-                            _panelSugerenciasAutomaticas(),
-                            const SizedBox(height: 10),
-                            _panelAccionesRapidas(),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          children: [
-                            _panelFiltrosAgenda(),
-                            const SizedBox(height: 10),
-                            Expanded(child: _listaCursos()),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      SizedBox(width: 360, child: _panelAlertas(lateral: true)),
+                      _panelResumenInicio(),
+                      const SizedBox(height: 10),
+                      _panelSugerenciasAutomaticas(),
+                      const SizedBox(height: 10),
+                      _panelAccionesRapidas(),
+                      const SizedBox(height: 10),
+                      _panelFiltrosAgenda(),
+                      const SizedBox(height: 10),
+                      _listaCursos(expandidoCompleto: true),
                     ],
-                  );
-                }
+                  ),
+                ),
+                const SizedBox(width: 10),
+                SizedBox(
+                  width: 340,
+                  child: _panelAlertas(expandidoCompleto: true),
+                ),
+              ],
+            );
+          } else {
+            contenido = Column(
+              children: [
+                _panelResumenInicio(),
+                const SizedBox(height: 10),
+                _panelSugerenciasAutomaticas(),
+                const SizedBox(height: 10),
+                _panelAccionesRapidas(),
+                const SizedBox(height: 10),
+                _panelFiltrosAgenda(),
+                const SizedBox(height: 10),
+                if (_alertas.isNotEmpty) _panelAlertas(expandidoCompleto: true),
+                const SizedBox(height: 10),
+                _listaCursos(expandidoCompleto: true),
+              ],
+            );
+          }
 
-                if (dosColumnas) {
-                  return Row(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Expanded(
-                        child: Column(
-                          children: [
-                            _panelResumenInicio(),
-                            const SizedBox(height: 10),
-                            _panelSugerenciasAutomaticas(),
-                            const SizedBox(height: 10),
-                            _panelAccionesRapidas(),
-                            const SizedBox(height: 10),
-                            _panelFiltrosAgenda(),
-                            const SizedBox(height: 10),
-                            Expanded(child: _listaCursos()),
-                          ],
+          return SingleChildScrollView(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: constraints.maxHeight),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (_sincronizando)
+                    const LinearProgressIndicator(minHeight: 2),
+                  PanelControlesModulo(
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        Text(
+                          'Agenda docente - ${_fechaLarga(_fecha)}',
+                          style: Theme.of(context).textTheme.titleMedium,
                         ),
-                      ),
-                      const SizedBox(width: 10),
-                      SizedBox(width: 340, child: _panelAlertas(lateral: true)),
-                    ],
-                  );
-                }
-
-                return Column(
-                  children: [
-                    _panelResumenInicio(),
-                    const SizedBox(height: 10),
-                    _panelSugerenciasAutomaticas(),
-                    const SizedBox(height: 10),
-                    _panelAccionesRapidas(),
-                    const SizedBox(height: 10),
-                    _panelFiltrosAgenda(),
-                    const SizedBox(height: 10),
-                    if (_alertas.isNotEmpty) _panelAlertas(),
-                    const SizedBox(height: 10),
-                    Expanded(child: _listaCursos()),
-                  ],
-                );
-              },
+                        ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 560),
+                          child: _bloqueDescripcionFuncion(
+                            context,
+                            'agenda',
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 8,
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: () => _cambiarDia(-1),
+                          icon: const Icon(Icons.chevron_left),
+                        ),
+                        TextButton(
+                          onPressed: _irAHoy,
+                          child: const Text('Hoy'),
+                        ),
+                        IconButton(
+                          onPressed: () => _cambiarDia(1),
+                          icon: const Icon(Icons.chevron_right),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: _abrirCursoActualOProximo,
+                          icon: const Icon(Icons.near_me_outlined),
+                          label: const Text('Curso actual'),
+                        ),
+                        IconButton(
+                          onPressed: _cargarAgenda,
+                          icon: const Icon(Icons.refresh),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  contenido,
+                ],
+              ),
             ),
-          ),
-        ],
+          );
+        },
       ),
     );
   }
 
-  Widget _panelAlertas({bool lateral = false}) {
+  Widget _panelAlertas({bool lateral = false, bool expandidoCompleto = false}) {
     final alertasFiltradas = _alertasFiltradas();
     final instituciones = _institucionesAlertaDisponibles();
     final cursoIds = _cursoIdsAlertaDisponibles();
@@ -1448,6 +2244,10 @@ class _AgendaDocentePantallaState extends State<AgendaDocentePantalla> {
             ),
           )
         : ListView.builder(
+            shrinkWrap: expandidoCompleto || !lateral,
+            physics: expandidoCompleto || !lateral
+                ? const NeverScrollableScrollPhysics()
+                : null,
             itemCount: alertasFiltradas.length,
             itemBuilder: (_, i) {
               final a = alertasFiltradas[i];
@@ -1564,7 +2364,9 @@ class _AgendaDocentePantallaState extends State<AgendaDocentePantalla> {
               ],
             ),
             const SizedBox(height: 8),
-            if (lateral)
+            if (expandidoCompleto)
+              listado
+            else if (lateral)
               Expanded(child: listado)
             else
               ConstrainedBox(
@@ -1577,7 +2379,7 @@ class _AgendaDocentePantallaState extends State<AgendaDocentePantalla> {
     );
   }
 
-  Widget _listaCursos() {
+  Widget _listaCursos({bool expandidoCompleto = false}) {
     final agendaVisible = _agendaFiltrada();
     if (_agenda.isEmpty) {
       return const EstadoListaVacia(
@@ -1593,6 +2395,8 @@ class _AgendaDocentePantallaState extends State<AgendaDocentePantalla> {
     }
 
     return ListView.separated(
+      shrinkWrap: expandidoCompleto,
+      physics: expandidoCompleto ? const NeverScrollableScrollPhysics() : null,
       itemCount: agendaVisible.length,
       separatorBuilder: (_, _) => const SizedBox(height: 8),
       itemBuilder: (_, i) {

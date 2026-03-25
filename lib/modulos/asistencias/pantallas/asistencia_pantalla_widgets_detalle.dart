@@ -157,6 +157,7 @@ extension _AsistenciaPantallaWidgetsDetalle on _AsistenciaPantallaState {
       return _panelDetalleVacio();
     }
     _sincronizarFormularioClase(clase);
+    final horarioClase = _resumenHorarioClase(clase);
 
     return Card(
       margin: EdgeInsets.zero,
@@ -216,6 +217,18 @@ extension _AsistenciaPantallaWidgetsDetalle on _AsistenciaPantallaState {
                 Text(_fechaClase(clase.fecha), style: textTheme.bodyMedium),
               ],
             ),
+            if (horarioClase != null) ...[
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Icon(Icons.schedule_outlined, size: 18, color: cs.primary),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(horarioClase, style: textTheme.bodyMedium),
+                  ),
+                ],
+              ),
+            ],
             const SizedBox(height: 14),
             if (_editandoDetalleClase) ...[
               TextField(

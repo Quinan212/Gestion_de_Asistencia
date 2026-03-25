@@ -200,6 +200,7 @@ class _CarrerasPantallaState extends State<CarrerasPantalla> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
+        scrollable: true,
         title: const Text('Nueva carrera'),
         content: TextField(
           controller: ctrl,
@@ -265,7 +266,7 @@ class _CarrerasPantallaState extends State<CarrerasPantalla> {
                 const SizedBox(height: 10),
                 DropdownButtonFormField<int>(
                   initialValue: anio,
-                  decoration: const InputDecoration(labelText: 'Anio'),
+                  decoration: const InputDecoration(labelText: 'Año'),
                   items: _opcionesAnio
                       .map(
                         (a) =>
@@ -303,7 +304,7 @@ class _CarrerasPantallaState extends State<CarrerasPantalla> {
       return;
     }
 
-    final errAnio = AppValidaciones.validarSeleccion<int>(anio, campo: 'Anio');
+    final errAnio = AppValidaciones.validarSeleccion<int>(anio, campo: 'Año');
     if (errAnio != null) {
       ScaffoldMessenger.of(
         context,
@@ -338,24 +339,26 @@ class _CarrerasPantallaState extends State<CarrerasPantalla> {
       builder: (context) => StatefulBuilder(
         builder: (context, setStateDialog) => AlertDialog(
           title: Text(titulo),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(detalle),
-              if (mostrarOpcionAlumnos) ...[
-                const SizedBox(height: 12),
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  value: eliminarAlumnos,
-                  title: const Text('Eliminar alumnos asociados'),
-                  subtitle: const Text(
-                    'Si se desactiva, se conservan y quedan sin asignacion.',
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(detalle),
+                if (mostrarOpcionAlumnos) ...[
+                  const SizedBox(height: 12),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: eliminarAlumnos,
+                    title: const Text('Eliminar alumnos asociados'),
+                    subtitle: const Text(
+                      'Si se desactiva, se conservan y quedan sin asignacion.',
+                    ),
+                    onChanged: (v) => setStateDialog(() => eliminarAlumnos = v),
                   ),
-                  onChanged: (v) => setStateDialog(() => eliminarAlumnos = v),
-                ),
+                ],
               ],
-            ],
+            ),
           ),
           actions: [
             TextButton(
@@ -889,7 +892,7 @@ class _CarrerasPantallaState extends State<CarrerasPantalla> {
                 if (!esDesktop) {
                   return Column(
                     children: [
-                      panelControles,
+                      Flexible(fit: FlexFit.loose, child: panelControles),
                       const SizedBox(height: 12),
                       Expanded(child: explorador),
                     ],
@@ -899,7 +902,13 @@ class _CarrerasPantallaState extends State<CarrerasPantalla> {
                 final anchoControles = c.maxWidth >= 1500 ? 360.0 : 320.0;
                 return Row(
                   children: [
-                    SizedBox(width: anchoControles, child: panelControles),
+                    SizedBox(
+                      width: anchoControles,
+                      child: Align(
+                        alignment: Alignment.topCenter,
+                        child: SingleChildScrollView(child: panelControles),
+                      ),
+                    ),
                     const SizedBox(width: 14),
                     Expanded(child: explorador),
                   ],

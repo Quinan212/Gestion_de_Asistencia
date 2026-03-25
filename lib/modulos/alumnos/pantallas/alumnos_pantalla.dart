@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '/aplicacion/utiles/layout_app.dart';
 import '/aplicacion/utiles/validaciones.dart';
+import '/aplicacion/widgets/campo_combo.dart';
 import '/aplicacion/widgets/estado_lista.dart';
 import '/aplicacion/widgets/panel_controles_modulo.dart';
 import '/infraestructura/dep_inyeccion/proveedores.dart';
@@ -146,20 +147,14 @@ class _AlumnosPantallaState extends State<AlumnosPantalla> {
                       textInputAction: TextInputAction.next,
                     ),
                     const SizedBox(height: 10),
-                    DropdownButtonFormField<int>(
-                      initialValue: institucionId,
-                      isExpanded: true,
-                      decoration: const InputDecoration(
-                        labelText: 'Institución',
-                      ),
-                      items: instituciones
+                    CampoCombo<int>(
+                      value: institucionId,
+                      labelText: 'Institución',
+                      opciones: instituciones
                           .map(
-                            (Institucion i) => DropdownMenuItem<int>(
+                            (Institucion i) => CampoComboOpcion<int>(
                               value: i.id,
-                              child: Text(
-                                i.nombre,
-                                overflow: TextOverflow.ellipsis,
-                              ),
+                              etiqueta: i.nombre,
                             ),
                           )
                           .toList(growable: false),
@@ -346,6 +341,7 @@ class _AlumnosPantallaState extends State<AlumnosPantalla> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
+        scrollable: true,
         title: const Text('Eliminar alumno'),
         content: Text('Se eliminará "$nombreCompleto" de forma permanente.'),
         actions: [
@@ -467,7 +463,7 @@ class _AlumnosPantallaState extends State<AlumnosPantalla> {
                         crossAxisCount: columnas,
                         crossAxisSpacing: 8,
                         mainAxisSpacing: 8,
-                        childAspectRatio: 1.22,
+                        mainAxisExtent: 118,
                       ),
                       itemCount: alumnos.length,
                       itemBuilder: (context, index) {
@@ -489,7 +485,7 @@ class _AlumnosPantallaState extends State<AlumnosPantalla> {
     final cs = Theme.of(context).colorScheme;
     final contexto = alumno.contextoAcademico.trim();
     final detalles = <String>[
-      if (alumno.edad != null) '${alumno.edad} anos',
+      if (alumno.edad != null) '${alumno.edad} años',
       if ((alumno.documento ?? '').trim().isNotEmpty)
         (alumno.documento ?? '').trim(),
     ];
@@ -504,7 +500,7 @@ class _AlumnosPantallaState extends State<AlumnosPantalla> {
         borderRadius: BorderRadius.circular(12),
         onTap: () {},
         child: Container(
-          padding: const EdgeInsets.all(10),
+          padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: cs.outlineVariant),
@@ -515,23 +511,23 @@ class _AlumnosPantallaState extends State<AlumnosPantalla> {
               Row(
                 children: [
                   Container(
-                    width: 32,
-                    height: 32,
+                    width: 28,
+                    height: 28,
                     decoration: BoxDecoration(
                       color: cs.secondary.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Icon(
                       Icons.person_outline_rounded,
-                      size: 18,
+                      size: 16,
                       color: cs.secondary,
                     ),
                   ),
                   const Spacer(),
                   Container(
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
+                      horizontal: 7,
+                      vertical: 3,
                     ),
                     decoration: BoxDecoration(
                       color: cs.surfaceContainerHighest.withValues(alpha: 0.55),
@@ -542,51 +538,65 @@ class _AlumnosPantallaState extends State<AlumnosPantalla> {
                       style: Theme.of(context).textTheme.labelSmall?.copyWith(
                         color: cs.onSurfaceVariant,
                         fontWeight: FontWeight.w700,
+                        fontSize: 10.5,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Container(
+                    width: 28,
+                    height: 28,
+                    decoration: BoxDecoration(
+                      color: cs.surfaceContainerHighest.withValues(alpha: 0.55),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: IconButton(
+                      padding: EdgeInsets.zero,
+                      onPressed: () => _eliminarAlumno(
+                        alumnoId: alumno.id,
+                        nombreCompleto: alumno.nombreCompleto,
+                      ),
+                      tooltip: 'Eliminar alumno',
+                      icon: Icon(
+                        Icons.delete_outline,
+                        size: 16,
+                        color: cs.onSurfaceVariant,
                       ),
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 6),
               Text(
                 alumno.nombreCompleto,
-                maxLines: 2,
+                maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(
                   context,
                 ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w700),
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: 2),
               Text(
                 secundaria,
-                maxLines: 2,
+                maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: cs.onSurfaceVariant,
+                  fontSize: 11.5,
+                ),
               ),
-              const SizedBox(height: 6),
+              const SizedBox(height: 2),
               Text(
                 contexto.isEmpty ? 'Sin contexto academico' : contexto,
-                maxLines: 2,
+                maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.labelMedium?.copyWith(
                   color: cs.primary,
                   fontWeight: FontWeight.w700,
+                  fontSize: 11.5,
                 ),
               ),
               const Spacer(),
-              Align(
-                alignment: Alignment.centerRight,
-                child: IconButton(
-                  onPressed: () => _eliminarAlumno(
-                    alumnoId: alumno.id,
-                    nombreCompleto: alumno.nombreCompleto,
-                  ),
-                  tooltip: 'Eliminar alumno',
-                  icon: const Icon(Icons.delete_outline),
-                ),
-              ),
             ],
           ),
         ),
@@ -625,7 +635,7 @@ class _AlumnosPantallaState extends State<AlumnosPantalla> {
           if (!mostrarDetalleDerecha) {
             return Column(
               children: [
-                controles,
+                Flexible(fit: FlexFit.loose, child: controles),
                 const SizedBox(height: 12),
                 Expanded(child: contenidoPrincipal),
               ],
@@ -636,7 +646,7 @@ class _AlumnosPantallaState extends State<AlumnosPantalla> {
             final anchoDetalle = 390.0;
             return Column(
               children: [
-                controles,
+                Flexible(fit: FlexFit.loose, child: controles),
                 const SizedBox(height: 12),
                 Expanded(
                   child: Row(
@@ -658,7 +668,13 @@ class _AlumnosPantallaState extends State<AlumnosPantalla> {
           final anchoDetalle = c.maxWidth >= 1550 ? 500.0 : 440.0;
           return Row(
             children: [
-              SizedBox(width: anchoControles, child: controles),
+              SizedBox(
+                width: anchoControles,
+                child: Align(
+                  alignment: Alignment.topCenter,
+                  child: SingleChildScrollView(child: controles),
+                ),
+              ),
               const SizedBox(width: 14),
               Expanded(child: contenidoPrincipal),
               const SizedBox(width: 14),
